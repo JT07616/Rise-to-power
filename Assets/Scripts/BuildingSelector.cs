@@ -26,6 +26,12 @@ public class BuildingSelector : MonoBehaviour
             return;
         }
 
+        // Blokiraj input dok je event popup otvoren
+        if (GameEventManager.IsPopupOpen)
+        {
+            return;
+        }
+
         HandleHover();
 
         if (Mouse.current.leftButton.wasPressedThisFrame)
