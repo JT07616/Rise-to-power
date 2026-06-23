@@ -6,7 +6,7 @@ using UnityEngine.UI;
 public class CharacterSelect : MonoBehaviour
 {
     public TMP_InputField nameInput;
-    public string sceneToLoad = "SampleScene";
+    public string sceneToLoad = "NewSampleScene";
 
     private Button maleButton;
     private Button femaleButton;

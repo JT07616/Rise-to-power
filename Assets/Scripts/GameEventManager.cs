@@ -19,6 +19,11 @@ public class GameEventManager : MonoBehaviour
     public int popupWidth = 640;
     public int popupHeight = 420;
 
+
+    public Texture2D popupBackground;
+    public Texture2D maleBackground;
+    public Texture2D femaleBackground;
+
     private bool eventActive;
     private GameEvent currentEvent;
     private bool isNotification;
@@ -48,6 +53,15 @@ public class GameEventManager : MonoBehaviour
 
     void Start()
     {
+        if (CharacterSelect.playerCharacter == "Male")
+        {
+            popupBackground = maleBackground;
+        }
+        else if (CharacterSelect.playerCharacter == "Female")
+        {
+            popupBackground = femaleBackground;
+        }
+
         StartCoroutine(TriggerFirstEvent());
     }
 
@@ -1658,10 +1672,16 @@ public class GameEventManager : MonoBehaviour
         float y = (Screen.height - popupHeight) / 2f;
         Rect rect = new Rect(x, y, popupWidth, popupHeight);
 
-        GUI.Box(rect, GUIContent.none);
+        if (popupBackground != null)
+        {
+            GUI.DrawTexture(rect, popupBackground, ScaleMode.StretchToFill);
+        }
+        else
+        {
+            GUI.Box(rect, GUIContent.none);
+        }
 
         GUILayout.BeginArea(new Rect(rect.x + 20, rect.y + 15, rect.width - 40, rect.height - 30));
-
         GUIStyle title = new GUIStyle(GUI.skin.label)
         {
             fontSize = 20,

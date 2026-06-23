@@ -35,6 +35,7 @@ public class BuildingPopupUI : MonoBehaviour
 
     public void ClosePanel()
     {
+        Debug.Log("CLOSE CLICKED");
         panel.SetActive(false);
     }
 }
