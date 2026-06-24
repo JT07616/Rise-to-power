@@ -31,6 +31,11 @@ public class BuildingSelector : MonoBehaviour
             return;
         }
 
+        if (popupUI != null && popupUI.IsOpen)
+        {
+            return;
+        }
+
         HandleHover();
 
         if (Mouse.current.leftButton.wasPressedThisFrame)

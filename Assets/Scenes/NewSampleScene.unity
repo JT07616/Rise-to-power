@@ -7291,7 +7291,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Close
+  m_text: X
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -7987,10 +7987,70 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7def17a520ae3dd479e2727d0e65ad4d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
-  buildingName: Store za dilanje
-  description: 'Tvoje prvo mjesto distribucije robe.
+  buildingName: Storefront
+  description: '"The sign still says groceries. That is the point."
 
-'
+
+    A small
+    storefront gives the operation a face. People come and go without raising immediate
+    suspicion, and product can move through the district faster. But every extra
+    customer is another pattern someone can notice.'
+  hasProductionControls: 1
+  requiresPurchase: 1
+  isPurchased: 0
+  purchaseCost: 450
+  purchaseButtonText: "Buy the storefront (-450 \u20AC)"
+  purchaseDescription: Before you can use this place, you need to buy the lease,
+    stock the shelves, and make the front believable. It is expensive, but it opens
+    a steady way to move product.
+  showIncreaseAction: 1
+  showDecreaseAction: 1
+  actionsChangeLevel: 1
+  actionCooldownEvents: 1
+  productionLevel: 0
+  minProductionLevel: -2
+  maxProductionLevel: 2
+  productionDescription: You choose how loudly the storefront works. Pushing sales
+    brings money and reputation, but also heat. Keeping it quiet slows income and
+    lowers risk. After each move, one event must pass before the storefront can be
+    adjusted again.
+  statusName: Distribution pressure
+  neutralStatusText: controlled
+  positiveStatusText: aggressive
+  negativeStatusText: quiet
+  increaseButtonText: Push distribution
+  decreaseButtonText: Keep it quiet
+  increaseNovac: 80
+  increaseRizik: 8
+  increaseReputacija: 5
+  increaseKvaliteta: 0
+  increaseStabilnost: 0
+  increaseRadnici: 0
+  increaseMoral: 0
+  increaseEfikasnost: 0
+  decreaseNovac: -40
+  decreaseRizik: -7
+  decreaseReputacija: 0
+  decreaseKvaliteta: 0
+  decreaseStabilnost: 0
+  decreaseRadnici: 0
+  decreaseMoral: 0
+  decreaseEfikasnost: 0
+  hasUpgrade: 1
+  upgradeLevel: 0
+  maxUpgradeLevel: 2
+  upgradeCost: 600
+  upgradeCostIncrease: 300
+  upgradeButtonText: Upgrade front
+  upgradeDescription: Make the store look more legitimate. Better shelves, cleaner
+    books, and believable foot traffic improve reputation and efficiency.
+  upgradeRizik: -3
+  upgradeReputacija: 5
+  upgradeKvaliteta: 0
+  upgradeStabilnost: 0
+  upgradeRadnici: 0
+  upgradeMoral: 0
+  upgradeEfikasnost: 8
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   selectedColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!1 &415297081
@@ -10206,8 +10266,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 15, y: 45}
-  m_SizeDelta: {x: 400, y: 50}
+  m_AnchoredPosition: {x: 15, y: 40}
+  m_SizeDelta: {x: 400, y: 300}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &525506079
 MonoBehaviour:
@@ -10261,8 +10321,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 22
-  m_fontSizeBase: 22
+  m_fontSize: 14
+  m_fontSizeBase: 14
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -10415,7 +10475,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 20, y: 90}
+  m_AnchoredPosition: {x: 20, y: 220}
   m_SizeDelta: {x: 400, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &530827051
@@ -10465,8 +10525,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 32
-  m_fontSizeBase: 32
+  m_fontSize: 25
+  m_fontSizeBase: 25
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -20176,8 +20236,68 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7def17a520ae3dd479e2727d0e65ad4d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
-  buildingName: "Napu\u0161tena tvornica"
-  description: "Unutar napu\u0161tene tvornice se radi roba."
+  buildingName: Abandoned Factory
+  description: '"Dead buildings are useful. Nobody asks why the lights are off."
+
+
+    The
+    abandoned factory is the heart of production. The walls hide noise, the empty
+    floor gives you room, and the old power lines still hold. More output means faster
+    money, but every extra shift makes the place harder to keep invisible.'
+  hasProductionControls: 1
+  requiresPurchase: 0
+  isPurchased: 0
+  purchaseCost: 100
+  purchaseButtonText: Buy location
+  purchaseDescription: This location must be bought before you can use its actions.
+  showIncreaseAction: 1
+  showDecreaseAction: 1
+  actionsChangeLevel: 1
+  actionCooldownEvents: 1
+  productionLevel: 0
+  minProductionLevel: -2
+  maxProductionLevel: 2
+  productionDescription: This is where you set the tempo between events. Increase
+    production for immediate money and better efficiency, or slow it down to reduce
+    risk and protect the location. After each change, one event must pass before
+    the factory can be adjusted again.
+  statusName: Production tempo
+  neutralStatusText: steady
+  positiveStatusText: intense
+  negativeStatusText: reduced
+  increaseButtonText: Increase production
+  decreaseButtonText: Reduce production
+  increaseNovac: 100
+  increaseRizik: 10
+  increaseReputacija: 0
+  increaseKvaliteta: 0
+  increaseStabilnost: -3
+  increaseRadnici: 0
+  increaseMoral: 0
+  increaseEfikasnost: 5
+  decreaseNovac: -60
+  decreaseRizik: -8
+  decreaseReputacija: 0
+  decreaseKvaliteta: 0
+  decreaseStabilnost: 3
+  decreaseRadnici: 0
+  decreaseMoral: 0
+  decreaseEfikasnost: -5
+  hasUpgrade: 1
+  upgradeLevel: 0
+  maxUpgradeLevel: 2
+  upgradeCost: 500
+  upgradeCostIncrease: 350
+  upgradeButtonText: Upgrade factory
+  upgradeDescription: Better equipment and basic soundproofing make production faster
+    and harder to notice.
+  upgradeRizik: -5
+  upgradeReputacija: 0
+  upgradeKvaliteta: 5
+  upgradeStabilnost: 5
+  upgradeRadnici: 0
+  upgradeMoral: 0
+  upgradeEfikasnost: 12
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   selectedColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!1001 &1086452809
@@ -25080,8 +25200,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -10, y: -90}
-  m_SizeDelta: {x: 160, y: 30}
+  m_AnchoredPosition: {x: 190, y: 240}
+  m_SizeDelta: {x: 30, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1366221378
 MonoBehaviour:
@@ -25140,7 +25260,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.47355163, g: 0.3729975, b: 0.6226415, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -27194,8 +27314,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -150, y: -10}
-  m_SizeDelta: {x: 400, y: 250}
+  m_AnchoredPosition: {x: -330, y: -10}
+  m_SizeDelta: {x: 450, y: 550}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1487924837
 MonoBehaviour:
@@ -29581,8 +29701,67 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7def17a520ae3dd479e2727d0e65ad4d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
-  buildingName: Stan
-  description: Short description of this building.
+  buildingName: Apartment
+  description: '"Sometimes the smartest move is to disappear."
+
+
+    The apartment
+    is not glamorous. That makes it useful. It gives you a quiet place to sleep,
+    plan, and wait until the streets forget your face.'
+  hasProductionControls: 1
+  requiresPurchase: 1
+  isPurchased: 0
+  purchaseCost: 300
+  purchaseButtonText: "Buy the apartment (-300 \u20AC)"
+  purchaseDescription: You need a place that is yours before you can vanish into
+    it. Buying the apartment gives you a safehouse, but it takes serious money out
+    of your pocket now.
+  showIncreaseAction: 1
+  showDecreaseAction: 0
+  actionsChangeLevel: 0
+  actionCooldownEvents: 2
+  productionLevel: 0
+  minProductionLevel: -2
+  maxProductionLevel: 2
+  productionDescription: 'Lay low here to lower risk by 10. You cannot do it constantly:
+    after using the apartment, two events must pass before it helps again.'
+  statusName: Safehouse status
+  neutralStatusText: ready
+  positiveStatusText: ready
+  negativeStatusText: ready
+  increaseButtonText: Lay low (-10 risk)
+  decreaseButtonText: Unused
+  increaseNovac: 0
+  increaseRizik: -10
+  increaseReputacija: 0
+  increaseKvaliteta: 0
+  increaseStabilnost: 0
+  increaseRadnici: 0
+  increaseMoral: 0
+  increaseEfikasnost: 0
+  decreaseNovac: 0
+  decreaseRizik: 0
+  decreaseReputacija: 0
+  decreaseKvaliteta: 0
+  decreaseStabilnost: 0
+  decreaseRadnici: 0
+  decreaseMoral: 0
+  decreaseEfikasnost: 0
+  hasUpgrade: 1
+  upgradeLevel: 0
+  maxUpgradeLevel: 2
+  upgradeCost: 450
+  upgradeCostIncrease: 250
+  upgradeButtonText: Upgrade safehouse
+  upgradeDescription: Locks, blinds, burner phones, and a cleaner routine make the
+    apartment safer when you need to disappear.
+  upgradeRizik: -5
+  upgradeReputacija: 0
+  upgradeKvaliteta: 0
+  upgradeStabilnost: 8
+  upgradeRadnici: 0
+  upgradeMoral: 5
+  upgradeEfikasnost: 0
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   selectedColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!4 &1607991645 stripped
@@ -32365,7 +32544,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c08d8024726ed48449cf792eff515815, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameEventManager
-  firstEventDelay: 60
+  firstEventDelay: 0
   delayBetweenEvents: 30
   barHeight: 40
   popupWidth: 640
@@ -32407,6 +32586,8 @@ MonoBehaviour:
   preparedDefense: 0
   futureAttackDamageBonus: 0
   baseDefended: 0
+  policeRaidCount: 0
+  maxPoliceRaids: 3
   gameOver: 0
   gameOverReason: 
   chapterEnded: 0
@@ -40928,8 +41109,71 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7def17a520ae3dd479e2727d0e65ad4d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
-  buildingName: Prvi kontakt i radnik
-  description: Short description of this building.
+  buildingName: First Contact
+  description: '"You do not find workers. Someone introduces them."
+
+
+    This contact
+    knows people who need money and know how to stay quiet. A worker costs you upfront,
+    and every new face adds risk, but more hands make the operation earn more over
+    time.'
+  hasProductionControls: 1
+  requiresPurchase: 1
+  isPurchased: 0
+  purchaseCost: 250
+  purchaseButtonText: "Pay the contact (-250 \u20AC)"
+  purchaseDescription: The contact will not move for free. Pay him first, and he
+    opens the door to hiring workers later. Good introductions are expensive because
+    silence is part of the price.
+  showIncreaseAction: 1
+  showDecreaseAction: 1
+  actionsChangeLevel: 1
+  actionCooldownEvents: 1
+  productionLevel: 0
+  minProductionLevel: 0
+  maxProductionLevel: 3
+  productionDescription: "Hire a worker for 220 \u20AC. Workers increase passive
+    income in future event cycles, but they also make the operation less invisible.
+    If you already have a worker, you can fire one to lower risk, but the operation
+    loses tempo. After each worker decision, one event must pass before the contact
+    can act again."
+  statusName: Hired workers from contact
+  neutralStatusText: none
+  positiveStatusText: active
+  negativeStatusText: none
+  increaseButtonText: "Hire worker (-220 \u20AC, +worker)"
+  decreaseButtonText: Fire worker (-worker, -risk)
+  increaseNovac: -220
+  increaseRizik: 8
+  increaseReputacija: 0
+  increaseKvaliteta: 0
+  increaseStabilnost: 0
+  increaseRadnici: 1
+  increaseMoral: 5
+  increaseEfikasnost: 15
+  decreaseNovac: 0
+  decreaseRizik: -8
+  decreaseReputacija: 0
+  decreaseKvaliteta: 0
+  decreaseStabilnost: 0
+  decreaseRadnici: -1
+  decreaseMoral: -5
+  decreaseEfikasnost: -15
+  hasUpgrade: 1
+  upgradeLevel: 0
+  maxUpgradeLevel: 2
+  upgradeCost: 550
+  upgradeCostIncrease: 300
+  upgradeButtonText: Upgrade network
+  upgradeDescription: Build a trusted network around the contact. Better introductions
+    mean fewer mistakes and workers who fit the operation faster.
+  upgradeRizik: -4
+  upgradeReputacija: 0
+  upgradeKvaliteta: 0
+  upgradeStabilnost: 0
+  upgradeRadnici: 0
+  upgradeMoral: 8
+  upgradeEfikasnost: 10
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   selectedColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!1001 &8866398022412708393

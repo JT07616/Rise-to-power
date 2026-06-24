@@ -29,6 +29,8 @@ public class GameResources : MonoBehaviour
     public bool preparedDefense = false;
     public int futureAttackDamageBonus = 0;
     public bool baseDefended = false;
+    public int policeRaidCount = 0;
+    public int maxPoliceRaids = 3;
 
     [Header("Game state")]
     public bool gameOver = false;
@@ -57,13 +59,39 @@ public class GameResources : MonoBehaviour
         moral += dMoral;
         efikasnost += dEfikasnost;
 
+        EvaluateGameOver();
         Clamp();
+    }
+
+    public void EvaluateGameOver()
+    {
+        if (gameOver)
+        {
+            return;
+        }
+
+        if (novac < 0)
+        {
+            gameOver = true;
+            gameOverReason = "You ran out of money. Without cash, the operation cannot continue.";
+        }
+        else if (stabilnost <= -50)
+        {
+            gameOver = true;
+            gameOverReason = "The base is too damaged to use. The operation collapses with it.";
+        }
+        else if (reputacija < 0)
+        {
+            gameOver = true;
+            gameOverReason = "Your reputation is gone. No one trusts you enough to keep doing business.";
+        }
     }
 
     public void Clamp()
     {
         kvaliteta = Mathf.Clamp(kvaliteta, 0, 100);
         stabilnost = Mathf.Clamp(stabilnost, -100, 100);
+        reputacija = Mathf.Max(0, reputacija);
         moral = Mathf.Clamp(moral, -100, 100);
         efikasnost = Mathf.Clamp(efikasnost, 0, 300);
         rizik = Mathf.Max(0, rizik);

@@ -57,6 +57,11 @@ public class SimpleStrategyCamera : MonoBehaviour
             return;
         }
 
+        if (BuildingPopupUI.IsAnyOpen)
+        {
+            return;
+        }
+
         HandleZoom();
         HandleClickMove();
         HandleRotation();

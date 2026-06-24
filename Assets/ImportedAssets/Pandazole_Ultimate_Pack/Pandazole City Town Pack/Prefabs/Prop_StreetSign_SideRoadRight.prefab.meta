@@ -1,14 +1,7 @@
 fileFormatVersion: 2
-guid: 60fcd6cb66ef6b24186ac181434c8d39
+guid: 7c6e722b5efe05c44b9da5b8d7da3461
 PrefabImporter:
   externalObjects: {}
   userData: 
   assetBundleName: 
   assetBundleVariant: 
-AssetOrigin:
-  serializedVersion: 1
-  productId: 205787
-  packageName: Pandazole - City Town Lowpoly Pack
-  packageVersion: 1.0.0
-  assetPath: Assets/Pandazole_Ultimate_Pack/Pandazole City Town Pack/Prefabs/Prop_StreetSign_SideRoadRight.prefab
-  uploadId: 467034

@@ -2,14 +2,16 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class GameEventManager : MonoBehaviour
 {
     public static bool IsPopupOpen { get; private set; }
+    public static int EventsCompleted { get; private set; }
 
     [Header("Timing")]
     [Tooltip("Seconds before the first event after game start.")]
-    public float firstEventDelay = 60f;
+    public float firstEventDelay = 0f;
 
     [Tooltip("Seconds between consecutive events.")]
     public float delayBetweenEvents = 30f;
@@ -53,6 +55,9 @@ public class GameEventManager : MonoBehaviour
 
     void Start()
     {
+        EventsCompleted = 0;
+        IsPopupOpen = false;
+
         if (CharacterSelect.playerCharacter == "Male")
         {
             popupBackground = maleBackground;
@@ -67,7 +72,11 @@ public class GameEventManager : MonoBehaviour
 
     IEnumerator TriggerFirstEvent()
     {
-        yield return new WaitForSeconds(firstEventDelay);
+        if (firstEventDelay > 0f)
+        {
+            yield return new WaitForSeconds(firstEventDelay);
+        }
+
         ShowEvent(BuildEvent1_Arrival());
     }
 
@@ -95,6 +104,7 @@ public class GameEventManager : MonoBehaviour
         if (!wasNotification)
         {
             ApplyConsequences();
+            EventsCompleted++;
 
             if (GameResources.Instance != null && GameResources.Instance.gameOver)
             {
@@ -230,6 +240,7 @@ public class GameEventManager : MonoBehaviour
 
         if (R.rizik >= 100)
         {
+            R.policeRaidCount++;
             int seizure = Mathf.Max(0, R.novac * 30 / 100);
             R.novac -= seizure;
             R.reputacija -= 20;
@@ -255,10 +266,19 @@ public class GameEventManager : MonoBehaviour
                 "and your name is on every report tonight.\n\n" +
                 $"Money seized: −{seizure} €\n" +
                 "Reputation: −20\n" +
-                "Risk reset to 30";
+                "Risk reset to 30\n" +
+                $"Police raids: {R.policeRaidCount}/{R.maxPoliceRaids}";
             if (workerLost > 0) body += "\nA worker was arrested (−1)";
             if (stabilityLoss > 0) body += $"\nBase damaged (Stability −{stabilityLoss})";
             EnqueueNotification("🚓 POLICE RAID!", body);
+
+            if (R.policeRaidCount >= R.maxPoliceRaids)
+            {
+                R.gameOver = true;
+                R.gameOverReason =
+                    "The police have caught you too many times. " +
+                    "After the last raid, there is no operation left to save.";
+            }
         }
 
         if (R.novac < 0 && UnityEngine.Random.Range(0, 100) < 50)
@@ -277,23 +297,8 @@ public class GameEventManager : MonoBehaviour
                 "Money like yours doesn't move quietly. Eyes are on you now.\n\nRisk +5");
         }
 
+        R.EvaluateGameOver();
         R.Clamp();
-
-        if (R.novac < -1000)
-        {
-            R.gameOver = true;
-            R.gameOverReason = "Bankrotirao si.";
-        }
-        else if (R.stabilnost <= -50)
-        {
-            R.gameOver = true;
-            R.gameOverReason = "Baza je potpuno uništena.";
-        }
-        else if (R.reputacija <= -50)
-        {
-            R.gameOver = true;
-            R.gameOverReason = "Nitko više ne želi poslovati s tobom.";
-        }
     }
 
     void ShowGameOver()
@@ -310,6 +315,7 @@ public class GameEventManager : MonoBehaviour
                     currentEvent = null;
                     IsPopupOpen = false;
                     GameResources.Instance.chapterEnded = true;
+                    SceneManager.LoadScene("MainMenu");
                 })
             }
         };
@@ -341,7 +347,7 @@ public class GameEventManager : MonoBehaviour
             {
                 new EventOption("Continue", () =>
                 {
-                    Debug.Log("➡️ Arrival — story begins.");
+                    Debug.Log("➡️ Dolazak — priča počinje.");
                     Next(BuildEvent2_FirstProduction);
                 })
             }
@@ -365,7 +371,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 100, dRizik: 5, dReputacija: 0, dKvaliteta: -10,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Fast production: +100 €, Quality -10, Risk +5");
+                    Debug.Log("➡️ Brza proizvodnja: +100 €, kvaliteta -10, rizik +5");
                     Next(BuildEvent3_FirstWorker);
                 }),
                 new EventOption("Careful production", () =>
@@ -373,7 +379,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 60, dRizik: 2, dReputacija: 0, dKvaliteta: 10,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Careful production: +60 €, Quality +10, Risk +2");
+                    Debug.Log("➡️ Pažljiva proizvodnja: +60 €, kvaliteta +10, rizik +2");
                     Next(BuildEvent3_FirstWorker);
                 })
             }
@@ -398,12 +404,12 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: 10, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 1, dMoral: 0, dEfikasnost: 25);
-                    Debug.Log("➡️ First worker hired: +1 worker, Efficiency +25, Risk +10");
+                    Debug.Log("➡️ Prvi radnik zaposlen: +1 radnik, efikasnost +25, rizik +10");
                     Next(BuildEvent4_FirstDistribution);
                 }),
                 new EventOption("Decline", () =>
                 {
-                    Debug.Log("➡️ First worker declined — no change.");
+                    Debug.Log("➡️ Prvi radnik odbijen — bez promjene.");
                     Next(BuildEvent4_FirstDistribution);
                 })
             }
@@ -429,14 +435,14 @@ public class GameEventManager : MonoBehaviour
                         GameResources.Instance.Apply(
                             dNovac: -50, dRizik: 0, dReputacija: -3, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("➡️ Distribution problem: -50 €, Reputation -3");
+                        Debug.Log("➡️ Problem s distribucijom: -50 €, reputacija -3");
                     }
                     else
                     {
                         GameResources.Instance.Apply(
                             dNovac: 150, dRizik: 5, dReputacija: 5, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("➡️ Successful distribution: +150 €, Reputation +5, Risk +5");
+                        Debug.Log("➡️ Uspješna distribucija: +150 €, reputacija +5, rizik +5");
                     }
                     Next(BuildEvent5_CustomerComplaint);
                 })
@@ -462,7 +468,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: 0, dReputacija: -10, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Complaint ignored: Reputation -10");
+                    Debug.Log("➡️ Žalba ignorirana: reputacija -10");
                     Next(BuildEvent6_SuspiciousNeighbor);
                 }),
                 new EventOption("Compensate", () =>
@@ -470,7 +476,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -50, dRizik: 0, dReputacija: 5, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Customer compensated: -50 €, Reputation +5");
+                    Debug.Log("➡️ Kupac obeštećen: -50 €, reputacija +5");
                     Next(BuildEvent6_SuspiciousNeighbor);
                 })
             }
@@ -496,7 +502,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 15, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
                     GameResources.Instance.suspiciousNeighborIgnored = true;
-                    Debug.Log("➡️ Neighbor ignored: Risk +15");
+                    Debug.Log("➡️ Susjed ignoriran: rizik +15");
                     Next(BuildEvent7_PolicePresence);
                 }),
                 new EventOption("Bribe", () =>
@@ -505,7 +511,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: -100, dRizik: -10, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
                     GameResources.Instance.suspiciousNeighborIgnored = false;
-                    Debug.Log("➡️ Neighbor bribed: -100 €, Risk -10");
+                    Debug.Log("➡️ Susjed podmićen: -100 €, rizik -10");
                     Next(BuildEvent7_PolicePresence);
                 })
             }
@@ -530,7 +536,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -100, dRizik: -15, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Activities paused: -100 €, Risk -15");
+                    Debug.Log("➡️ Aktivnosti zaustavljene: -100 €, rizik -15");
                     ContinueAfterEvent7();
                 }),
                 new EventOption("Continue work", () =>
@@ -538,7 +544,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 200, dRizik: 20, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Continued working: +200 €, Risk +20");
+                    Debug.Log("➡️ Rad nastavljen: +200 €, rizik +20");
                     ContinueAfterEvent7();
                 })
             }
@@ -553,7 +559,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Worker Delay & Quality Test skipped — no workers hired.");
+            Debug.Log("➡️ Kašnjenje radnika i test kvalitete preskočeni — nema zaposlenih radnika.");
             Next(BuildEvent10_EquipmentFailure);
         }
     }
@@ -566,7 +572,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Brilliant Idea skipped — no workers hired.");
+            Debug.Log("➡️ Briljantna ideja preskočena — nema zaposlenih radnika.");
             Next(BuildEvent12_BetterWorker);
         }
     }
@@ -589,7 +595,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 10, dEfikasnost: 0);
                     GameResources.Instance.workerMistakeChanceBonus += 5;
-                    Debug.Log("➡️ Worker forgiven: Morale +10, future mistake chance +5%");
+                    Debug.Log("➡️ Radniku je oprošteno: moral +10, buduća šansa za grešku +5%");
                     Next(BuildEvent9_QualityTest);
                 }),
                 new EventOption("Punish", () =>
@@ -598,7 +604,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: -15, dEfikasnost: 0);
                     GameResources.Instance.workerMistakeChanceBonus -= 5;
-                    Debug.Log("➡️ Worker punished: Morale -15, future mistake chance -5%");
+                    Debug.Log("➡️ Radnik kažnjen: moral -15, buduća šansa za grešku -5%");
                     Next(BuildEvent9_QualityTest);
                 })
             }
@@ -622,7 +628,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -50, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: -30);
-                    Debug.Log("➡️ Quality test ignored: -50 €, Efficiency -30");
+                    Debug.Log("➡️ Test kvalitete ignoriran: -50 €, efikasnost -30");
                     Next(BuildEvent10_EquipmentFailure);
                 }),
                 new EventOption("Punish", () =>
@@ -631,7 +637,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: -10, dEfikasnost: 0);
                     GameResources.Instance.workerMistakeChanceBonus -= 10;
-                    Debug.Log("➡️ Worker punished for testing: Morale -10, repeat chance -10%");
+                    Debug.Log("➡️ Radnik kažnjen zbog testiranja: moral -10, šansa ponavljanja -10%");
                     Next(BuildEvent10_EquipmentFailure);
                 }),
                 new EventOption("Joke about it", () =>
@@ -639,7 +645,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: 5, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 15, dEfikasnost: 0);
-                    Debug.Log("➡️ Joked about it: Morale +15, Risk +5");
+                    Debug.Log("➡️ Situacija okrenuta na šalu: moral +15, rizik +5");
                     Next(BuildEvent10_EquipmentFailure);
                 })
             }
@@ -663,7 +669,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -150, dRizik: 0, dReputacija: 0, dKvaliteta: 15,
                         dStabilnost: 10, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Equipment repaired: -150 €, Quality +15, Stability +10");
+                    Debug.Log("➡️ Oprema popravljena: -150 €, kvaliteta +15, stabilnost +10");
                     ContinueAfterEvent10();
                 }),
                 new EventOption("Ignore", () =>
@@ -672,7 +678,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 0, dReputacija: 0, dKvaliteta: -20,
                         dStabilnost: -10, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
                     GameResources.Instance.badBatchChanceBonus += 15;
-                    Debug.Log("➡️ Failure ignored: Quality -20, Stability -10, bad batch chance +15%");
+                    Debug.Log("➡️ Kvar ignoriran: kvaliteta -20, stabilnost -10, šansa loše serije +15%");
                     ContinueAfterEvent10();
                 })
             }
@@ -696,13 +702,13 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: 10, dReputacija: 0, dKvaliteta: -30,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Tested the brilliant idea: Quality -30, Risk +10");
+                    Debug.Log("➡️ Briljantna ideja testirana: kvaliteta -30, rizik +10");
                     if (UnityEngine.Random.Range(0, 100) < 10)
                     {
                         GameResources.Instance.Apply(
                             dNovac: 0, dRizik: 0, dReputacija: 15, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("🎲 Unexpectedly, the idea became a hit: Reputation +15");
+                        Debug.Log("🎲 Neočekivano, ideja je uspjela: reputacija +15");
                     }
                     Next(BuildEvent12_BetterWorker);
                 }),
@@ -711,7 +717,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -120, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 5, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Bad experiment discarded: -120 €, Stability +5");
+                    Debug.Log("➡️ Loš eksperiment odbačen: -120 €, stabilnost +5");
                     Next(BuildEvent12_BetterWorker);
                 })
             }
@@ -736,12 +742,12 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 20, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 1, dMoral: 0, dEfikasnost: 50);
                     GameResources.Instance.betrayalChanceLateGame += 25;
-                    Debug.Log("➡️ Better worker hired: +1 worker, Efficiency +50, Risk +20, betrayal chance +25%");
+                    Debug.Log("➡️ Bolji radnik zaposlen: +1 radnik, efikasnost +50, rizik +20, šansa izdaje +25%");
                     Next(BuildEvent13_BigOrder);
                 }),
                 new EventOption("Refuse", () =>
                 {
-                    Debug.Log("➡️ Better worker refused — slower tempo, full control.");
+                    Debug.Log("➡️ Bolji radnik odbijen — sporiji tempo, ali puna kontrola.");
                     Next(BuildEvent13_BigOrder);
                 })
             }
@@ -765,7 +771,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 500, dRizik: 25, dReputacija: 10, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Big order accepted: +500 €, Risk +25, Reputation +10");
+                    Debug.Log("➡️ Velika narudžba prihvaćena: +500 €, rizik +25, reputacija +10");
                     Next(BuildEvent14_Negotiator);
                 }),
                 new EventOption("Refuse", () =>
@@ -773,7 +779,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: -5, dReputacija: -5, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Big order refused: Reputation -5, Risk -5");
+                    Debug.Log("➡️ Velika narudžba odbijena: reputacija -5, rizik -5");
                     Next(BuildEvent14_Negotiator);
                 })
             }
@@ -797,7 +803,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 80, dRizik: 0, dReputacija: 3, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Accepted lower price: +80 €, Reputation +3");
+                    Debug.Log("➡️ Niža cijena prihvaćena: +80 €, reputacija +3");
                     ContinueAfterEvent14();
                 }),
                 new EventOption("Refuse", () =>
@@ -807,14 +813,14 @@ public class GameEventManager : MonoBehaviour
                         GameResources.Instance.Apply(
                             dNovac: 150, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("🎲 Buyer paid full price: +150 €");
+                        Debug.Log("🎲 Kupac je platio punu cijenu: +150 €");
                     }
                     else
                     {
                         GameResources.Instance.Apply(
                             dNovac: 0, dRizik: 0, dReputacija: -5, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("🎲 Buyer left and spread bad word: Reputation -5");
+                        Debug.Log("🎲 Kupac je otišao i proširio loš glas: reputacija -5");
                     }
                     ContinueAfterEvent14();
                 })
@@ -830,7 +836,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Theft & Runaway Dealer skipped — no workers hired.");
+            Debug.Log("➡️ Krađa i odbjegli diler preskočeni — nema zaposlenih radnika.");
             Next(BuildEvent17_RivalAppears);
         }
     }
@@ -852,7 +858,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: -10, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 5, dRadnici: -1, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Thief fired: -1 worker, Risk -10, Stability +5");
+                    Debug.Log("➡️ Lopov otpušten: -1 radnik, rizik -10, stabilnost +5");
                     Next(BuildEvent16_RunawayDealer);
                 }),
                 new EventOption("Keep the thief", () =>
@@ -861,7 +867,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: -10, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
                     GameResources.Instance.theftPerCycle += 100;
-                    Debug.Log("➡️ Thief kept: -100 €/cycle, Stability -10");
+                    Debug.Log("➡️ Lopov zadržan: -100 €/ciklus, stabilnost -10");
                     Next(BuildEvent16_RunawayDealer);
                 })
             }
@@ -885,17 +891,17 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -100, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Search started: -100 €");
+                    Debug.Log("➡️ Potraga započeta: -100 €");
                     if (UnityEngine.Random.Range(0, 100) < 50)
                     {
                         GameResources.Instance.Apply(
                             dNovac: 150, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("🎲 Worker found, part of the goods recovered: +150 €");
+                        Debug.Log("🎲 Radnik pronađen, dio robe vraćen: +150 €");
                     }
                     else
                     {
-                        Debug.Log("🎲 Worker gone forever.");
+                        Debug.Log("🎲 Radnik je nestao zauvijek.");
                     }
                     Next(BuildEvent17_RivalAppears);
                 }),
@@ -904,7 +910,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -200, dRizik: -5, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: -10, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Gave up: -200 €, Risk -5, Stability -10");
+                    Debug.Log("➡️ Odustajanje: -200 €, rizik -5, stabilnost -10");
                     Next(BuildEvent17_RivalAppears);
                 })
             }
@@ -930,7 +936,7 @@ public class GameEventManager : MonoBehaviour
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
                     GameResources.Instance.rivalActive = true;
                     GameResources.Instance.incomePenaltyPercent += 10;
-                    Debug.Log("➡️ Rival is active: Risk +10, street earnings -10%");
+                    Debug.Log("➡️ Rival je aktivan: rizik +10, ulična zarada -10%");
                     ContinueAfterEvent17();
                 })
             }
@@ -945,7 +951,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Friendly Guy skipped — no workers hired.");
+            Debug.Log("➡️ Prijateljski tip preskočen — nema zaposlenih radnika.");
             Next(BuildEvent19_StreetControl);
         }
     }
@@ -958,7 +964,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Salary Demand skipped — no workers hired.");
+            Debug.Log("➡️ Zahtjev za plaću preskočen — nema zaposlenih radnika.");
             Next(BuildEvent22_Expansion);
         }
     }
@@ -971,7 +977,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Neighbor Report skipped — neighbor was bribed.");
+            Debug.Log("➡️ Prijava susjeda preskočena — susjed je podmićen.");
             ContinueAfterEvent23();
         }
     }
@@ -984,7 +990,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Sabotage skipped — no active rival.");
+            Debug.Log("➡️ Sabotaža preskočena — nema aktivnog rivala.");
             Next(BuildEvent25_ProfitGrowth);
         }
     }
@@ -997,7 +1003,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Worker Mistake skipped — no workers hired.");
+            Debug.Log("➡️ Greška radnika preskočena — nema zaposlenih radnika.");
             Next(BuildEvent27_BlackMarket);
         }
     }
@@ -1010,7 +1016,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Being Watched skipped — no workers hired.");
+            Debug.Log("➡️ Nadzor preskočen — nema zaposlenih radnika.");
             ContinueAfterEvent29();
         }
     }
@@ -1023,7 +1029,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Direct Threat skipped — no active rival.");
+            Debug.Log("➡️ Izravna prijetnja preskočena — nema aktivnog rivala.");
             Next(BuildEvent31_ResourceShortage);
         }
     }
@@ -1036,7 +1042,7 @@ public class GameEventManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("➡️ Attack & Aftermath skipped — no active rival.");
+            Debug.Log("➡️ Napad i posljedice preskočeni — nema aktivnog rivala.");
             Next(BuildEvent35_EndChapter);
         }
     }
@@ -1058,23 +1064,23 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: -5, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Believed the worker: Risk -5");
+                    Debug.Log("➡️ Radniku se vjerovalo: rizik -5");
                     if (UnityEngine.Random.Range(0, 100) < 30)
                     {
                         GameResources.Instance.Apply(
                             dNovac: 0, dRizik: 25, dReputacija: 0, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("🎲 It was a disaster. Risk +25.");
+                        Debug.Log("🎲 Bila je katastrofa. Rizik +25.");
                     }
                     else
                     {
-                        Debug.Log("🎲 This time it actually worked out.");
+                        Debug.Log("🎲 Ovaj put je stvarno uspjelo.");
                     }
                     Next(BuildEvent19_StreetControl);
                 }),
                 new EventOption("Ignore", () =>
                 {
-                    Debug.Log("➡️ Ignored the cop-friend story.");
+                    Debug.Log("➡️ Priča o prijatelju policajcu je ignorirana.");
                     Next(BuildEvent19_StreetControl);
                 })
             }
@@ -1098,7 +1104,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -80, dRizik: -10, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Goods hidden: -80 €, Risk -10");
+                    Debug.Log("➡️ Roba sakrivena: -80 €, rizik -10");
                     Next(BuildEvent20_BadProduct);
                 }),
                 new EventOption("Continue", () =>
@@ -1106,13 +1112,13 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 150, dRizik: 15, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Continued the run: +150 €, Risk +15");
+                    Debug.Log("➡️ Ruta nastavljena: +150 €, rizik +15");
                     if (UnityEngine.Random.Range(0, 100) < 25)
                     {
                         GameResources.Instance.Apply(
                             dNovac: -120, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("🎲 Shipment lost to the check: -120 €");
+                        Debug.Log("🎲 Pošiljka izgubljena na kontroli: -120 €");
                     }
                     Next(BuildEvent20_BadProduct);
                 })
@@ -1137,7 +1143,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 120, dRizik: 0, dReputacija: -15, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Sold bad batch: +120 €, Reputation -15");
+                    Debug.Log("➡️ Loša serija prodana: +120 €, reputacija -15");
                     ContinueAfterEvent20();
                 }),
                 new EventOption("Destroy the batch", () =>
@@ -1145,7 +1151,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -80, dRizik: 0, dReputacija: 3, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Destroyed bad batch: -80 €, Reputation +3");
+                    Debug.Log("➡️ Loša serija uništena: -80 €, reputacija +3");
                     ContinueAfterEvent20();
                 })
             }
@@ -1171,7 +1177,7 @@ public class GameEventManager : MonoBehaviour
                         dStabilnost: 0, dRadnici: 0, dMoral: 20, dEfikasnost: 0);
                     GameResources.Instance.salaryPerCycle += 70;
                     GameResources.Instance.departureChance -= 15;
-                    Debug.Log("➡️ Salary raised: -70 €/cycle, Morale +20, departure chance -15%");
+                    Debug.Log("➡️ Plaća povećana: -70 €/ciklus, moral +20, šansa odlaska -15%");
                     Next(BuildEvent22_Expansion);
                 }),
                 new EventOption("Reject", () =>
@@ -1180,7 +1186,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: -20, dEfikasnost: 0);
                     GameResources.Instance.departureChance += 30;
-                    Debug.Log("➡️ Salary refused: Morale -20, departure chance +30%");
+                    Debug.Log("➡️ Povišica odbijena: moral -20, šansa odlaska +30%");
                     Next(BuildEvent22_Expansion);
                 })
             }
@@ -1204,12 +1210,12 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -500, dRizik: 15, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 15, dRadnici: 0, dMoral: 0, dEfikasnost: 50);
-                    Debug.Log("➡️ New location bought: -500 €, Stability +15, Efficiency +50, Risk +15");
+                    Debug.Log("➡️ Nova lokacija kupljena: -500 €, stabilnost +15, efikasnost +50, rizik +15");
                     ContinueAfterEvent22();
                 }),
                 new EventOption("Refuse", () =>
                 {
-                    Debug.Log("➡️ Expansion refused — no change.");
+                    Debug.Log("➡️ Širenje odbijeno — bez promjene.");
                     ContinueAfterEvent22();
                 })
             }
@@ -1233,7 +1239,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -200, dRizik: -20, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Police contact bribed: -200 €, Risk -20");
+                    Debug.Log("➡️ Policijski kontakt podmićen: -200 €, rizik -20");
                     ContinueAfterEvent23();
                 }),
                 new EventOption("Temporary shutdown", () =>
@@ -1241,7 +1247,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -150, dRizik: -10, dReputacija: -3, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Temporary shutdown: -150 €, Risk -10, Reputation -3");
+                    Debug.Log("➡️ Privremeno zatvaranje: -150 €, rizik -10, reputacija -3");
                     ContinueAfterEvent23();
                 })
             }
@@ -1265,7 +1271,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: 20, dReputacija: 8, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Retaliated against rival: Risk +20, Reputation +8");
+                    Debug.Log("➡️ Uzvraćeno rivalu: rizik +20, reputacija +8");
                     Next(BuildEvent25_ProfitGrowth);
                 }),
                 new EventOption("Ignore", () =>
@@ -1273,7 +1279,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -200, dRizik: 0, dReputacija: -10, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Sabotage ignored: -200 €, Reputation -10");
+                    Debug.Log("➡️ Sabotaža ignorirana: -200 €, reputacija -10");
                     Next(BuildEvent25_ProfitGrowth);
                 })
             }
@@ -1297,7 +1303,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 300, dRizik: 10, dReputacija: 10, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Profit growth: +300 €, Reputation +10, Risk +10");
+                    Debug.Log("➡️ Rast profita: +300 €, reputacija +10, rizik +10");
                     ContinueAfterEvent25();
                 })
             }
@@ -1322,7 +1328,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: -15, dEfikasnost: 0);
                     GameResources.Instance.workerMistakeChanceBonus -= 10;
-                    Debug.Log("➡️ Worker punished: Morale -15, repeat chance -10%");
+                    Debug.Log("➡️ Radnik kažnjen: moral -15, šansa ponavljanja -10%");
                     Next(BuildEvent27_BlackMarket);
                 }),
                 new EventOption("Forgive", () =>
@@ -1331,7 +1337,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 10, dEfikasnost: 0);
                     GameResources.Instance.workerMistakeChanceBonus += 5;
-                    Debug.Log("➡️ Worker forgiven: Morale +10, future mistake chance +5%");
+                    Debug.Log("➡️ Radniku je oprošteno: moral +10, buduća šansa greške +5%");
                     Next(BuildEvent27_BlackMarket);
                 })
             }
@@ -1356,7 +1362,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 300, dRizik: 30, dReputacija: 15, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
                     GameResources.Instance.blackMarketActive = true;
-                    Debug.Log("➡️ Black market accepted: +300 €, Reputation +15, Risk +30");
+                    Debug.Log("➡️ Crno tržište prihvaćeno: +300 €, reputacija +15, rizik +30");
                     Next(BuildEvent28_ReputationRising);
                 }),
                 new EventOption("Refuse", () =>
@@ -1364,7 +1370,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: -5, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Black market refused: Risk -5");
+                    Debug.Log("➡️ Crno tržište odbijeno: rizik -5");
                     Next(BuildEvent28_ReputationRising);
                 })
             }
@@ -1389,7 +1395,7 @@ public class GameEventManager : MonoBehaviour
                         dNovac: 0, dRizik: 10, dReputacija: 15, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
                     GameResources.Instance.jobsBonusPercent += 20;
-                    Debug.Log("➡️ Reputation rising: Reputation +15, jobs +20%, Risk +10");
+                    Debug.Log("➡️ Reputacija raste: reputacija +15, poslovi +20%, rizik +10");
                     ContinueAfterEvent28();
                 })
             }
@@ -1413,7 +1419,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -150, dRizik: -20, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Workers withdrawn: -150 €, Risk -20");
+                    Debug.Log("➡️ Radnici povučeni: -150 €, rizik -20");
                     ContinueAfterEvent29();
                 }),
                 new EventOption("Continue work", () =>
@@ -1421,13 +1427,13 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 200, dRizik: 20, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Continued under surveillance: +200 €, Risk +20");
+                    Debug.Log("➡️ Rad nastavljen pod nadzorom: +200 €, rizik +20");
                     if (UnityEngine.Random.Range(0, 100) < 40)
                     {
                         GameResources.Instance.Apply(
                             dNovac: -250, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("🎲 Raid hit: -250 €");
+                        Debug.Log("🎲 Pretres je pogodio posao: -250 €");
                     }
                     ContinueAfterEvent29();
                 })
@@ -1454,13 +1460,13 @@ public class GameEventManager : MonoBehaviour
                         dStabilnost: 20, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
                     GameResources.Instance.preparedDefense = true;
                     GameResources.Instance.futureAttackDamageBonus -= 25;
-                    Debug.Log("➡️ Defense prepared: -200 €, Stability +20, future damage -25%");
+                    Debug.Log("➡️ Obrana pripremljena: -200 €, stabilnost +20, buduća šteta -25%");
                     Next(BuildEvent31_ResourceShortage);
                 }),
                 new EventOption("Ignore threat", () =>
                 {
                     GameResources.Instance.futureAttackDamageBonus += 25;
-                    Debug.Log("➡️ Threat ignored: future attack damage +25%");
+                    Debug.Log("➡️ Prijetnja ignorirana: buduća šteta napada +25%");
                     Next(BuildEvent31_ResourceShortage);
                 })
             }
@@ -1484,7 +1490,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -180, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log("➡️ Bought expensive supplies: -180 €");
+                    Debug.Log("➡️ Skupa nabava kupljena: -180 €");
                     Next(BuildEvent32_SystemEscalation);
                 }),
                 new EventOption("Wait", () =>
@@ -1492,7 +1498,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: 0, dReputacija: -5, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: -30);
-                    Debug.Log("➡️ Waited for supplies: Efficiency -30, Reputation -5");
+                    Debug.Log("➡️ Čekanje zaliha: efikasnost -30, reputacija -5");
                     Next(BuildEvent32_SystemEscalation);
                 })
             }
@@ -1516,7 +1522,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: 0, dRizik: 5, dReputacija: 0, dKvaliteta: 0,
                         dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 10);
-                    Debug.Log("➡️ System escalates: Risk +5, Efficiency +10 (earning potential)");
+                    Debug.Log("➡️ Sustav eskalira: rizik +5, efikasnost +10 (potencijal zarade)");
                     ContinueAfterEvent32();
                 })
             }
@@ -1543,13 +1549,13 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -300 - extra, dRizik: 0, dReputacija: 20, dKvaliteta: 0,
                         dStabilnost: stabilityLoss, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log($"➡️ Defended base: -{300 + extra} €, Stability {stabilityLoss}, Reputation +20");
+                    Debug.Log($"➡️ Baza obranjena: -{300 + extra} €, stabilnost {stabilityLoss}, reputacija +20");
                     if (GameResources.Instance.radnici > 0 && UnityEngine.Random.Range(0, 100) < 50)
                     {
                         GameResources.Instance.Apply(
                             dNovac: 0, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: -1, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("🎲 Lost a worker during the defense.");
+                        Debug.Log("🎲 Radnik izgubljen tijekom obrane.");
                     }
                     GameResources.Instance.baseDefended = true;
                     Next(BuildEvent34_Aftermath);
@@ -1562,7 +1568,7 @@ public class GameEventManager : MonoBehaviour
                     GameResources.Instance.Apply(
                         dNovac: -400 - extra, dRizik: -20, dReputacija: -5, dKvaliteta: 0,
                         dStabilnost: stabilityLoss, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                    Debug.Log($"➡️ Retreated: -{400 + extra} €, Stability {stabilityLoss}, Risk -20, Reputation -5");
+                    Debug.Log($"➡️ Povlačenje: -{400 + extra} €, stabilnost {stabilityLoss}, rizik -20, reputacija -5");
                     GameResources.Instance.baseDefended = false;
                     Next(BuildEvent34_Aftermath);
                 })
@@ -1591,12 +1597,12 @@ public class GameEventManager : MonoBehaviour
                         GameResources.Instance.Apply(
                             dNovac: 0, dRizik: 10, dReputacija: 0, dKvaliteta: 0,
                             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
-                        Debug.Log("➡️ Base defended — image of strength brings more heat: Risk +10");
+                        Debug.Log("➡️ Baza obranjena — slika snage privlači pažnju: rizik +10");
                     }
                     else
                     {
                         GameResources.Instance.incomePenaltyPercent += 20;
-                        Debug.Log("➡️ Base abandoned — future earnings -20%");
+                        Debug.Log("➡️ Baza napuštena — buduća zarada -20%");
                     }
                     Next(BuildEvent35_EndChapter);
                 })
@@ -1622,7 +1628,7 @@ public class GameEventManager : MonoBehaviour
             {
                 new EventOption("End Chapter", () =>
                 {
-                    Debug.Log("🏁 Chapter 1 ended.");
+                    Debug.Log("🏁 Poglavlje 1 završeno.");
                     GameResources.Instance.chapterEnded = true;
                 })
             }

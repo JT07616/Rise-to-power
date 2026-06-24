@@ -1,14 +1,7 @@
 fileFormatVersion: 2
-guid: cafcf6bb427652a4980d23bb3a13e778
+guid: aa95b8ec83e8c6d419e37b3805b1c6ad
 PrefabImporter:
   externalObjects: {}
   userData: 
   assetBundleName: 
   assetBundleVariant: 
-AssetOrigin:
-  serializedVersion: 1
-  productId: 205787
-  packageName: Pandazole - City Town Lowpoly Pack
-  packageVersion: 1.0.0
-  assetPath: Assets/Pandazole_Ultimate_Pack/Pandazole City Town Pack/Prefabs/Prop_StreetSign_RoadNarrows.prefab
-  uploadId: 467034
