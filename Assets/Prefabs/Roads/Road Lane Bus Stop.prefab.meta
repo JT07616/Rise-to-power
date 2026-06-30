@@ -9,6 +9,5 @@ AssetOrigin:
   productId: 58899
   packageName: SimplePoly City - Low Poly Assets
   packageVersion: 1.2.3
-  assetPath: Assets/SimplePoly City - Low Poly Assets/Prefab/Roads/Road Lane Bus
-    Stop.prefab
+  assetPath: Assets/Prefabs/Roads/Road Lane Bus Stop.prefab
   uploadId: 171409
