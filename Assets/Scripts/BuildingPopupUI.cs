@@ -12,6 +12,11 @@ public class BuildingPopupUI : MonoBehaviour
     public TMP_Text titleText;
     public TMP_Text descriptionText;
 
+    [Header("Audio")]
+    public AudioSource uiAudioSource;
+    public AudioClip popupOpenSound;
+    public AudioClip buttonClickSound;
+
     private BuildingInfo currentBuilding;
 
     public bool IsOpen
@@ -43,10 +48,14 @@ public class BuildingPopupUI : MonoBehaviour
 
         panel.SetActive(true);
         IsAnyOpen = true;
+
+        PlayPopupOpen();
     }
 
     public void ClosePanel()
     {
+        PlayButtonClick();
+
         Debug.Log("CLOSE CLICKED");
         currentBuilding = null;
         panel.SetActive(false);
@@ -79,6 +88,7 @@ public class BuildingPopupUI : MonoBehaviour
             GUI.enabled = currentBuilding.CanPurchase();
             if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetPurchaseButtonLabel()))
             {
+                PlayButtonClick();
                 currentBuilding.Purchase();
                 RefreshText();
             }
@@ -93,6 +103,7 @@ public class BuildingPopupUI : MonoBehaviour
             GUI.enabled = currentBuilding.CanIncreaseProduction();
             if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetIncreaseButtonLabel()))
             {
+                PlayButtonClick();
                 currentBuilding.IncreaseProduction();
                 RefreshText();
             }
@@ -105,6 +116,7 @@ public class BuildingPopupUI : MonoBehaviour
             float buttonX = x + buttonIndex * (buttonWidth + gap);
             if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetDecreaseButtonLabel()))
             {
+                PlayButtonClick();
                 currentBuilding.DecreaseProduction();
                 RefreshText();
             }
@@ -117,6 +129,7 @@ public class BuildingPopupUI : MonoBehaviour
             float buttonX = x + buttonIndex * (buttonWidth + gap);
             if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetUpgradeButtonLabel()))
             {
+                PlayButtonClick();
                 currentBuilding.Upgrade();
                 RefreshText();
             }
@@ -181,5 +194,21 @@ public class BuildingPopupUI : MonoBehaviour
         }
 
         descriptionText.text = currentBuilding.GetFullDescription();
+    }
+
+    private void PlayPopupOpen()
+    {
+        if (uiAudioSource != null && popupOpenSound != null)
+        {
+            uiAudioSource.PlayOneShot(popupOpenSound);
+        }
+    }
+
+    private void PlayButtonClick()
+    {
+        if (uiAudioSource != null && buttonClickSound != null)
+        {
+            uiAudioSource.PlayOneShot(buttonClickSound);
+        }
     }
 }

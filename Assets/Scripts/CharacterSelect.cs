@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
@@ -19,6 +20,10 @@ public class CharacterSelect : MonoBehaviour
     public Color selectedColor = Color.green;
     public Color normalColor = Color.white;
 
+    [Header("Audio")]
+    public AudioSource uiAudioSource;
+    public AudioClip buttonClickSound;
+
     void Awake()
     {
         maleButton = GameObject.Find("MaleButton").GetComponent<Button>();
@@ -27,6 +32,8 @@ public class CharacterSelect : MonoBehaviour
 
     public void SelectMale()
     {
+        PlayButtonClick();
+
         selectedCharacter = "Male";
 
         maleButton.image.color = selectedColor;
@@ -37,6 +44,8 @@ public class CharacterSelect : MonoBehaviour
 
     public void SelectFemale()
     {
+        PlayButtonClick();
+
         selectedCharacter = "Female";
 
         femaleButton.image.color = selectedColor;
@@ -68,6 +77,21 @@ public class CharacterSelect : MonoBehaviour
         playerName = nameInput.text;
         playerCharacter = selectedCharacter;
 
+        PlayButtonClick();
+        StartCoroutine(LoadGame());
+    }
+
+    private IEnumerator LoadGame()
+    {
+        yield return new WaitForSeconds(0.15f);
         SceneManager.LoadScene(sceneToLoad);
+    }
+
+    private void PlayButtonClick()
+    {
+        if (uiAudioSource != null && buttonClickSound != null)
+        {
+            uiAudioSource.PlayOneShot(buttonClickSound);
+        }
     }
 }

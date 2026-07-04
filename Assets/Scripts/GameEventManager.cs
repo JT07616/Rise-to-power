@@ -26,6 +26,12 @@ public class GameEventManager : MonoBehaviour
     public Texture2D maleBackground;
     public Texture2D femaleBackground;
 
+    [Header("Audio")]
+    public AudioSource uiAudioSource;
+    public AudioClip popupOpenSound;
+    public AudioClip buttonClickSound;
+    public AudioClip popupCloseSound;
+
     private bool eventActive;
     private GameEvent currentEvent;
     private bool isNotification;
@@ -55,6 +61,13 @@ public class GameEventManager : MonoBehaviour
 
     void Start()
     {
+        MenuMusic music = FindFirstObjectByType<MenuMusic>();
+
+        if (music != null)
+        {
+            Destroy(music.gameObject);
+        }
+
         EventsCompleted = 0;
         IsPopupOpen = false;
 
@@ -85,11 +98,34 @@ public class GameEventManager : MonoBehaviour
         currentEvent = e;
         eventActive = true;
         IsPopupOpen = true;
+
+        if (uiAudioSource != null && popupOpenSound != null)
+        {
+            uiAudioSource.PlayOneShot(popupOpenSound);
+        }
+    }
+
+    private void PlayButtonClick()
+    {
+        if (uiAudioSource != null && buttonClickSound != null)
+        {
+            uiAudioSource.PlayOneShot(buttonClickSound);
+        }
+    }
+
+    private void PlayPopupClose()
+    {
+        if (uiAudioSource != null && popupCloseSound != null)
+        {
+            uiAudioSource.PlayOneShot(popupCloseSound);
+        }
     }
 
     void Choose(int idx)
     {
         if (currentEvent == null) return;
+
+        PlayButtonClick();
 
         var chosen = currentEvent.options[idx];
         bool wasNotification = isNotification;

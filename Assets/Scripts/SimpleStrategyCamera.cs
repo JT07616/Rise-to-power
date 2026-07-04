@@ -13,11 +13,11 @@ public class SimpleStrategyCamera : MonoBehaviour
     public float minHeight = 15f;
     public float maxHeight = 73.6f;
 
-    public float minX = 202.8f;
-    public float maxX = 834f;
+    public float minX = 202.8f; 
+    public float maxX = 834f;  
 
     public float minZ = 694.6f;
-    public float maxZ = 1603.29f;
+    public float maxZ = 1603.29f; 
 
     public float minPitch = 10f;
     public float maxPitch = 85f;
