@@ -69,6 +69,11 @@ public class BuildingPopupUI : MonoBehaviour
             return;
         }
 
+        if (GameEventManager.IsPauseMenuOpen)
+        {
+            return;
+        }
+
         if (GameEventManager.IsPopupOpen)
         {
             return;

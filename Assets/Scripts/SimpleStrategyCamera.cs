@@ -52,6 +52,11 @@ public class SimpleStrategyCamera : MonoBehaviour
             return;
         }
 
+        if (GameEventManager.IsPauseMenuOpen)
+        {
+            return;
+        }
+
         if (GameEventManager.IsPopupOpen)
         {
             return;

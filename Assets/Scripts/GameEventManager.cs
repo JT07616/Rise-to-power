@@ -2,11 +2,13 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 public class GameEventManager : MonoBehaviour
 {
     public static bool IsPopupOpen { get; private set; }
+    public static bool IsPauseMenuOpen { get; private set; }
     public static int EventsCompleted { get; private set; }
 
     [Header("Timing")]
@@ -37,6 +39,7 @@ public class GameEventManager : MonoBehaviour
     private bool isNotification;
     private Queue<GameEvent> notificationQueue = new Queue<GameEvent>();
     private Func<GameEvent> pendingNext;
+    private float previousTimeScale = 1f;
 
     [Serializable]
     public class EventOption
@@ -81,6 +84,34 @@ public class GameEventManager : MonoBehaviour
         }
 
         StartCoroutine(TriggerFirstEvent());
+    }
+
+    void Update()
+    {
+        if (Keyboard.current == null)
+        {
+            return;
+        }
+
+        if (Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            if (IsPauseMenuOpen)
+            {
+                ContinueGame();
+            }
+            else
+            {
+                OpenPauseMenu();
+            }
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (IsPauseMenuOpen)
+        {
+            ContinueGame();
+        }
     }
 
     IEnumerator TriggerFirstEvent()
@@ -1675,10 +1706,82 @@ public class GameEventManager : MonoBehaviour
     {
         DrawResourceBar();
 
+        if (IsPauseMenuOpen)
+        {
+            DrawPauseMenu();
+            return;
+        }
+
         if (eventActive && currentEvent != null)
         {
             DrawEventPopup();
         }
+    }
+
+    void DrawPauseMenu()
+    {
+        int previousDepth = GUI.depth;
+        GUI.depth = -1000;
+
+        GUI.color = new Color(0f, 0f, 0f, 0.55f);
+        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = Color.white;
+
+        float windowWidth = 360f;
+        float windowHeight = 220f;
+        Rect windowRect = new Rect(
+            (Screen.width - windowWidth) / 2f,
+            (Screen.height - windowHeight) / 2f,
+            windowWidth,
+            windowHeight
+        );
+
+        GUI.ModalWindow(987654, windowRect, DrawPauseWindow, "Pause Menu");
+        GUI.depth = previousDepth;
+    }
+
+    void DrawPauseWindow(int windowId)
+    {
+        float buttonWidth = 220f;
+        float buttonHeight = 44f;
+        float x = (360f - buttonWidth) / 2f;
+
+        if (GUI.Button(new Rect(x, 70f, buttonWidth, buttonHeight), "Continue Game"))
+        {
+            ContinueGame();
+        }
+
+        if (GUI.Button(new Rect(x, 130f, buttonWidth, buttonHeight), "Quit Game"))
+        {
+            QuitGame();
+        }
+    }
+
+    void OpenPauseMenu()
+    {
+        previousTimeScale = Time.timeScale;
+        Time.timeScale = 0f;
+        IsPauseMenuOpen = true;
+    }
+
+    void ContinueGame()
+    {
+        Time.timeScale = previousTimeScale;
+        IsPauseMenuOpen = false;
+    }
+
+    void QuitGame()
+    {
+        Time.timeScale = previousTimeScale;
+        IsPauseMenuOpen = false;
+
+        Debug.Log("Game exited from pause menu");
+
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     void DrawResourceBar()

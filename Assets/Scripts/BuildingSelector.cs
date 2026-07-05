@@ -26,6 +26,11 @@ public class BuildingSelector : MonoBehaviour
             return;
         }
 
+        if (GameEventManager.IsPauseMenuOpen)
+        {
+            return;
+        }
+
         if (GameEventManager.IsPopupOpen)
         {
             return;
