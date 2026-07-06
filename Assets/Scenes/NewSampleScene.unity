@@ -113802,7 +113802,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -330, y: -10}
+  m_AnchoredPosition: {x: -250, y: -10}
   m_SizeDelta: {x: 450, y: 550}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &585160104
@@ -272145,6 +272145,14 @@ MonoBehaviour:
   popupBackground: {fileID: 2800000, guid: e2784459644be7348b4ec3e78c5783cc, type: 3}
   maleBackground: {fileID: 2800000, guid: e2784459644be7348b4ec3e78c5783cc, type: 3}
   femaleBackground: {fileID: 2800000, guid: e936c58e0ab3d5441a1c1378edfa4b18, type: 3}
+  moneyIcon: {fileID: 2800000, guid: 242b4430c6f1a134ea42a9ef12fc5d3a, type: 3}
+  riskIcon: {fileID: 2800000, guid: a3ac026c44cb6124799f58e6cc188868, type: 3}
+  reputationIcon: {fileID: 2800000, guid: e31328dfee916cb4f9f8558f58ac6b8b, type: 3}
+  qualityIcon: {fileID: 2800000, guid: 57b78492824e0e9479155ae38582adc2, type: 3}
+  stabilityIcon: {fileID: 2800000, guid: 3999dd256a26422468b50d3d331f33c5, type: 3}
+  workersIcon: {fileID: 2800000, guid: a045aa1c620bfea498bf0638921b162c, type: 3}
+  moraleIcon: {fileID: 2800000, guid: 1691b26b438e04e44867aa1f9d0a7e4a, type: 3}
+  efficiencyIcon: {fileID: 2800000, guid: bcb097b026ff2954da6a1896b77123a1, type: 3}
   uiAudioSource: {fileID: 2141461661}
   popupOpenSound: {fileID: 8300000, guid: 8b2bda80580f9234c89c519471c5b280, type: 3}
   buttonClickSound: {fileID: 8300000, guid: 193b7d116cdfd5846bd97c0c208a2ca2, type: 3}

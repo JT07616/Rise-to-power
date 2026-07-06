@@ -28,6 +28,16 @@ public class GameEventManager : MonoBehaviour
     public Texture2D maleBackground;
     public Texture2D femaleBackground;
 
+    [Header("Resource bar icons")]
+    public Texture2D moneyIcon;
+    public Texture2D riskIcon;
+    public Texture2D reputationIcon;
+    public Texture2D qualityIcon;
+    public Texture2D stabilityIcon;
+    public Texture2D workersIcon;
+    public Texture2D moraleIcon;
+    public Texture2D efficiencyIcon;
+
     [Header("Audio")]
     public AudioSource uiAudioSource;
     public AudioClip popupOpenSound;
@@ -40,6 +50,7 @@ public class GameEventManager : MonoBehaviour
     private Queue<GameEvent> notificationQueue = new Queue<GameEvent>();
     private Func<GameEvent> pendingNext;
     private float previousTimeScale = 1f;
+    private readonly Dictionary<Color, Texture2D> generatedResourceIcons = new Dictionary<Color, Texture2D>();
 
     [Serializable]
     public class EventOption
@@ -1791,24 +1802,105 @@ public class GameEventManager : MonoBehaviour
 
         GUI.Box(new Rect(0, 0, Screen.width, barHeight), GUIContent.none);
 
+        string[] resourceTexts =
+        {
+            $"Money: {r.novac} €",
+            $"Risk: {r.rizik}",
+            $"Reputation: {r.reputacija}",
+            $"Quality: {r.kvaliteta}",
+            $"Stability: {r.stabilnost}",
+            $"Workers: {r.radnici}",
+            $"Morale: {r.moral}",
+            $"Efficiency: {r.efikasnost}%"
+        };
+
         GUIStyle style = new GUIStyle(GUI.skin.label)
         {
             fontSize = 16,
             alignment = TextAnchor.MiddleLeft,
+            wordWrap = false,
+            clipping = TextClipping.Overflow,
             normal = { textColor = Color.white }
         };
 
-        string text =
-            $"💰 Money: {r.novac} €   " +
-            $"⚠️ Risk: {r.rizik}   " +
-            $"⭐ Reputation: {r.reputacija}   " +
-            $"🧪 Quality: {r.kvaliteta}   " +
-            $"🏚 Stability: {r.stabilnost}   " +
-            $"👷 Workers: {r.radnici}   " +
-            $"🙂 Morale: {r.moral}   " +
-            $"⚙ Efficiency: {r.efikasnost}%";
+        const float baseIconSize = 20f;
+        const float baseIconTextGap = 8f;
+        const float baseItemGap = 32f;
+        const float horizontalPadding = 15f;
+        const float minScale = 0.72f;
 
-        GUI.Label(new Rect(15, 0, Screen.width - 30, barHeight), text, style);
+        float contentWidth = horizontalPadding;
+        foreach (string text in resourceTexts)
+        {
+            contentWidth += baseIconSize + baseIconTextGap + GetLabelWidth(style, text) + baseItemGap;
+        }
+
+        float availableWidth = Mathf.Max(1f, Screen.width - horizontalPadding);
+        float scale = Mathf.Clamp(availableWidth / contentWidth, minScale, 1f);
+        if (scale < 1f)
+        {
+            style.fontSize = Mathf.Max(11, Mathf.RoundToInt(style.fontSize * scale));
+        }
+
+        float iconSize = baseIconSize * scale;
+        float iconTextGap = baseIconTextGap * scale;
+        float itemGap = baseItemGap * scale;
+
+        float x = horizontalPadding;
+        DrawResourceItem(ref x, moneyIcon, new Color(0.95f, 0.78f, 0.2f), resourceTexts[0], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, riskIcon, new Color(0.95f, 0.25f, 0.2f), resourceTexts[1], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, reputationIcon, new Color(0.45f, 0.7f, 1f), resourceTexts[2], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, qualityIcon, new Color(0.45f, 0.95f, 0.65f), resourceTexts[3], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, stabilityIcon, new Color(0.65f, 0.55f, 0.45f), resourceTexts[4], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, workersIcon, new Color(0.95f, 0.55f, 0.25f), resourceTexts[5], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, moraleIcon, new Color(1f, 0.55f, 0.75f), resourceTexts[6], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, efficiencyIcon, new Color(0.65f, 0.65f, 0.95f), resourceTexts[7], style, iconSize, iconTextGap, itemGap);
+    }
+
+    void DrawResourceItem(ref float x, Texture2D icon, Color fallbackColor, string text, GUIStyle style,
+                          float iconSize, float iconTextGap, float itemGap)
+    {
+        float y = (barHeight - iconSize) / 2f;
+        Texture2D texture = icon != null ? icon : GetGeneratedResourceIcon(fallbackColor);
+        GUI.DrawTexture(new Rect(x, y, iconSize, iconSize), texture, ScaleMode.ScaleToFit, true);
+        x += iconSize + iconTextGap;
+
+        float textWidth = GetLabelWidth(style, text);
+        GUI.Label(new Rect(x, 0, textWidth, barHeight), text, style);
+        x += textWidth + itemGap;
+    }
+
+    float GetLabelWidth(GUIStyle style, string text)
+    {
+        style.CalcMinMaxWidth(new GUIContent(text), out _, out float maxWidth);
+        return Mathf.Ceil(maxWidth) + 12f;
+    }
+
+    Texture2D GetGeneratedResourceIcon(Color color)
+    {
+        if (generatedResourceIcons.TryGetValue(color, out Texture2D icon))
+        {
+            return icon;
+        }
+
+        const int size = 32;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        Color transparent = new Color(0f, 0f, 0f, 0f);
+        Vector2 center = new Vector2((size - 1) / 2f, (size - 1) / 2f);
+        float radius = size * 0.43f;
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float distance = Vector2.Distance(new Vector2(x, y), center);
+                texture.SetPixel(x, y, distance <= radius ? color : transparent);
+            }
+        }
+
+        texture.Apply();
+        generatedResourceIcons[color] = texture;
+        return texture;
     }
 
     void DrawEventPopup()
