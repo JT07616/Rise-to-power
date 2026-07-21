@@ -62,6 +62,11 @@ public class SimpleStrategyCamera : MonoBehaviour
             return;
         }
 
+        if (DeliveryOrderManager.IsPopupOpen)
+        {
+            return;
+        }
+
         if (BuildingPopupUI.IsAnyOpen)
         {
             return;

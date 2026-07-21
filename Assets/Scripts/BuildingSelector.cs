@@ -36,6 +36,16 @@ public class BuildingSelector : MonoBehaviour
             return;
         }
 
+        if (DeliveryOrderManager.IsPopupOpen)
+        {
+            return;
+        }
+
+        if (!GameEventManager.CanPlayerAct)
+        {
+            return;
+        }
+
         if (popupUI != null && popupUI.IsOpen)
         {
             return;
@@ -78,6 +88,13 @@ public class BuildingSelector : MonoBehaviour
             return;
         }
 
+        DeliveryOrderTarget deliveryTarget = GetDeliveryTargetUnderMouse();
+        if (deliveryTarget != null)
+        {
+            deliveryTarget.OpenOrder();
+            return;
+        }
+
         if (hoveredBuilding == null)
         {
             return;
@@ -109,6 +126,22 @@ public class BuildingSelector : MonoBehaviour
         if (Physics.Raycast(ray, out RaycastHit hit, 500f, clickableLayers))
         {
             return hit.collider.GetComponentInParent<BuildingInfo>();
+        }
+
+        return null;
+    }
+
+    DeliveryOrderTarget GetDeliveryTargetUnderMouse()
+    {
+        if (mainCamera == null)
+        {
+            return null;
+        }
+
+        Ray ray = mainCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+        if (Physics.Raycast(ray, out RaycastHit hit, 500f, clickableLayers))
+        {
+            return hit.collider.GetComponentInParent<DeliveryOrderTarget>();
         }
 
         return null;

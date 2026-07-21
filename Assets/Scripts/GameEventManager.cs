@@ -10,8 +10,32 @@ public class GameEventManager : MonoBehaviour
     public static bool IsPopupOpen { get; private set; }
     public static bool IsPauseMenuOpen { get; private set; }
     public static int EventsCompleted { get; private set; }
+    public static int CurrentDay { get; private set; }
+    public static int PlayerActionsRemaining { get; private set; }
+    public static int AiActionsRemaining { get; private set; }
+    public static bool IsPlayerTurn { get; private set; }
+    public static float PlayerTurnTimeRemaining { get; private set; }
+    public static bool CanPlayerAct
+    {
+        get
+        {
+            return instance != null && IsPlayerTurn && PlayerActionsRemaining > 0 &&
+                   !IsPauseMenuOpen && GameResources.Instance != null &&
+                   !GameResources.Instance.gameOver && !GameResources.Instance.chapterEnded;
+        }
+    }
+
+    private static GameEventManager instance;
+
+    [Header("Turn system")]
+    [Min(1)] public int actionsPerSide = 3;
+    [Min(1f)] public float playerTurnDuration = 30f;
+    [Min(0f)] public float aiActionDelay = 0.6f;
 
     [Header("Timing")]
+    [Tooltip("Old linear story sequence. Keep disabled for the turn-based sandbox mode.")]
+    public bool enableLegacyStoryEvents = false;
+
     [Tooltip("Seconds before the first event after game start.")]
     public float firstEventDelay = 0f;
 
@@ -52,6 +76,11 @@ public class GameEventManager : MonoBehaviour
     private float previousTimeScale = 1f;
     private readonly Dictionary<Color, Texture2D> generatedResourceIcons = new Dictionary<Color, Texture2D>();
 
+    void Awake()
+    {
+        instance = this;
+    }
+
     [Serializable]
     public class EventOption
     {
@@ -83,7 +112,17 @@ public class GameEventManager : MonoBehaviour
         }
 
         EventsCompleted = 0;
+        CurrentDay = 1;
+        PlayerActionsRemaining = actionsPerSide;
+        AiActionsRemaining = actionsPerSide;
+        IsPlayerTurn = true;
+        PlayerTurnTimeRemaining = playerTurnDuration;
         IsPopupOpen = false;
+
+        if (GetComponent<DeliveryOrderManager>() == null)
+        {
+            gameObject.AddComponent<DeliveryOrderManager>();
+        }
 
         if (CharacterSelect.playerCharacter == "Male")
         {
@@ -94,11 +133,16 @@ public class GameEventManager : MonoBehaviour
             popupBackground = femaleBackground;
         }
 
-        StartCoroutine(TriggerFirstEvent());
+        if (enableLegacyStoryEvents)
+        {
+            StartCoroutine(TriggerFirstEvent());
+        }
     }
 
     void Update()
     {
+        UpdateTurnTimer();
+
         if (Keyboard.current == null)
         {
             return;
@@ -117,8 +161,28 @@ public class GameEventManager : MonoBehaviour
         }
     }
 
+    void UpdateTurnTimer()
+    {
+        if (!IsPlayerTurn || IsPauseMenuOpen || GameResources.Instance == null ||
+            GameResources.Instance.gameOver || GameResources.Instance.chapterEnded)
+        {
+            return;
+        }
+
+        PlayerTurnTimeRemaining = Mathf.Max(0f, PlayerTurnTimeRemaining - Time.deltaTime);
+        if (PlayerTurnTimeRemaining <= 0f)
+        {
+            BeginAiTurn();
+        }
+    }
+
     void OnDestroy()
     {
+        if (instance == this)
+        {
+            instance = null;
+        }
+
         if (IsPauseMenuOpen)
         {
             ContinueGame();
@@ -166,6 +230,8 @@ public class GameEventManager : MonoBehaviour
     void Choose(int idx)
     {
         if (currentEvent == null) return;
+        bool isGameOverChoice = GameResources.Instance != null && GameResources.Instance.gameOver;
+        if (!isNotification && !isGameOverChoice && !CanPlayerAct) return;
 
         PlayButtonClick();
 
@@ -181,8 +247,8 @@ public class GameEventManager : MonoBehaviour
 
         if (!wasNotification)
         {
-            ApplyConsequences();
             EventsCompleted++;
+            CompletePlayerAction();
 
             if (GameResources.Instance != null && GameResources.Instance.gameOver)
             {
@@ -193,6 +259,74 @@ public class GameEventManager : MonoBehaviour
         }
 
         ContinueChain();
+    }
+
+    public static void CompletePlayerAction()
+    {
+        if (instance == null || !IsPlayerTurn || PlayerActionsRemaining <= 0)
+        {
+            return;
+        }
+
+        if (GameResources.Instance != null && GameResources.Instance.gameOver)
+        {
+            instance.StopAllCoroutines();
+            instance.ShowGameOver();
+            return;
+        }
+
+        PlayerActionsRemaining--;
+
+        if (PlayerActionsRemaining <= 0)
+        {
+            instance.BeginAiTurn();
+        }
+    }
+
+    void BeginAiTurn()
+    {
+        if (!IsPlayerTurn)
+        {
+            return;
+        }
+
+        IsPlayerTurn = false;
+        PlayerActionsRemaining = 0;
+        PlayerTurnTimeRemaining = 0f;
+        AiActionsRemaining = actionsPerSide;
+        StartCoroutine(PlayPlaceholderAiTurn());
+    }
+
+    IEnumerator PlayPlaceholderAiTurn()
+    {
+        while (AiActionsRemaining > 0)
+        {
+            if (aiActionDelay > 0f)
+            {
+                yield return new WaitForSeconds(aiActionDelay);
+            }
+
+            Debug.Log($"AI action {actionsPerSide - AiActionsRemaining + 1}/{actionsPerSide} (placeholder).");
+            AiActionsRemaining--;
+        }
+
+        CurrentDay++;
+        PlayerActionsRemaining = actionsPerSide;
+        ApplyConsequences();
+
+        if (GameResources.Instance != null && GameResources.Instance.gameOver)
+        {
+            ShowGameOver();
+            yield break;
+        }
+
+        IsPlayerTurn = true;
+        PlayerTurnTimeRemaining = playerTurnDuration;
+
+        if (!eventActive && notificationQueue.Count > 0)
+        {
+            ShowNotification(notificationQueue.Dequeue());
+        }
     }
 
     void ContinueChain()
@@ -404,6 +538,10 @@ public class GameEventManager : MonoBehaviour
     IEnumerator DelayedShow(Func<GameEvent> builder)
     {
         yield return new WaitForSeconds(delayBetweenEvents);
+        while (!IsPlayerTurn || eventActive || notificationQueue.Count > 0)
+        {
+            yield return null;
+        }
         ShowEvent(builder());
     }
 
@@ -1716,6 +1854,7 @@ public class GameEventManager : MonoBehaviour
     void OnGUI()
     {
         DrawResourceBar();
+        DrawTurnPanel();
 
         if (IsPauseMenuOpen)
         {
@@ -1727,6 +1866,29 @@ public class GameEventManager : MonoBehaviour
         {
             DrawEventPopup();
         }
+    }
+
+    void DrawTurnPanel()
+    {
+        const float panelWidth = 310f;
+        const float panelHeight = 42f;
+        const float margin = 12f;
+        Rect panelRect = new Rect(Screen.width - panelWidth - margin, barHeight + margin, panelWidth, panelHeight);
+
+        GUI.Box(panelRect, GUIContent.none);
+
+        GUIStyle statusStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 15,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            normal = { textColor = Color.white }
+        };
+
+        string status = IsPlayerTurn
+            ? $"Day {CurrentDay}  |  Actions: {PlayerActionsRemaining}/{actionsPerSide}  |  Time: {Mathf.CeilToInt(PlayerTurnTimeRemaining)}s"
+            : $"Day {CurrentDay}  |  AI actions: {AiActionsRemaining}/{actionsPerSide}";
+        GUI.Label(new Rect(panelRect.x + 8f, panelRect.y + 8f, panelRect.width - 16f, 26f), status, statusStyle);
     }
 
     void DrawPauseMenu()

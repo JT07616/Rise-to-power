@@ -83,7 +83,7 @@ public class BuildingInfo : MonoBehaviour
 
     private Renderer[] renderers;
     private Color[] originalColors;
-    private int lastActionEvent = -1000;
+    private int lastActionDay = -1000;
 
     void Awake()
     {
@@ -139,10 +139,10 @@ public class BuildingInfo : MonoBehaviour
             fullDescription += "\n" + GetUpgradeStatus();
         }
 
-        int cooldownRemaining = GetCooldownEventsRemaining();
+        int cooldownRemaining = GetCooldownDaysRemaining();
         if (cooldownRemaining > 0)
         {
-            fullDescription += $"\nAction available after {cooldownRemaining} more event(s).";
+            fullDescription += $"\nAction available after {cooldownRemaining} more day(s).";
         }
 
         return fullDescription;
@@ -176,7 +176,8 @@ public class BuildingInfo : MonoBehaviour
     public bool CanPurchase()
     {
         return hasProductionControls && requiresPurchase && !isPurchased &&
-               GameResources.Instance != null && GameResources.Instance.novac >= purchaseCost;
+               GameEventManager.CanPlayerAct && GameResources.Instance != null &&
+               GameResources.Instance.novac >= purchaseCost;
     }
 
     public void Purchase()
@@ -190,13 +191,15 @@ public class BuildingInfo : MonoBehaviour
             dNovac: -purchaseCost, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
             dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
         isPurchased = true;
+        GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: location bought for {purchaseCost} €.");
     }
 
     public bool CanUpgrade()
     {
         return hasProductionControls && hasUpgrade && IsUnlocked() &&
-               upgradeLevel < maxUpgradeLevel && HasEnoughMoneyFor(-GetUpgradeCost());
+               GameEventManager.CanPlayerAct && upgradeLevel < maxUpgradeLevel &&
+               HasEnoughMoneyFor(-GetUpgradeCost());
     }
 
     public void Upgrade()
@@ -211,12 +214,14 @@ public class BuildingInfo : MonoBehaviour
         GameResources.Instance.Apply(
             dNovac: -cost, dRizik: upgradeRizik, dReputacija: upgradeReputacija, dKvaliteta: upgradeKvaliteta,
             dStabilnost: upgradeStabilnost, dRadnici: upgradeRadnici, dMoral: upgradeMoral, dEfikasnost: upgradeEfikasnost);
+        GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: upgraded to level {upgradeLevel}/{maxUpgradeLevel} for {cost} €.");
     }
 
     public bool CanIncreaseProduction()
     {
-        if (!hasProductionControls || !showIncreaseAction || !IsUnlocked() || IsActionOnCooldown())
+        if (!hasProductionControls || !showIncreaseAction || !IsUnlocked() ||
+            !GameEventManager.CanPlayerAct || IsActionOnCooldown())
         {
             return false;
         }
@@ -226,7 +231,8 @@ public class BuildingInfo : MonoBehaviour
 
     public bool CanDecreaseProduction()
     {
-        if (!hasProductionControls || !showDecreaseAction || !IsUnlocked() || IsActionOnCooldown())
+        if (!hasProductionControls || !showDecreaseAction || !IsUnlocked() ||
+            !GameEventManager.CanPlayerAct || IsActionOnCooldown())
         {
             return false;
         }
@@ -251,7 +257,8 @@ public class BuildingInfo : MonoBehaviour
         GameResources.Instance.Apply(
             dNovac: increaseNovac, dRizik: increaseRizik, dReputacija: increaseReputacija, dKvaliteta: increaseKvaliteta,
             dStabilnost: increaseStabilnost, dRadnici: increaseRadnici, dMoral: increaseMoral, dEfikasnost: increaseEfikasnost);
-        lastActionEvent = GameEventManager.EventsCompleted;
+        lastActionDay = GameEventManager.CurrentDay;
+        GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: {increaseButtonText}.");
     }
 
@@ -270,7 +277,8 @@ public class BuildingInfo : MonoBehaviour
         GameResources.Instance.Apply(
             dNovac: decreaseNovac, dRizik: decreaseRizik, dReputacija: decreaseReputacija, dKvaliteta: decreaseKvaliteta,
             dStabilnost: decreaseStabilnost, dRadnici: decreaseRadnici, dMoral: decreaseMoral, dEfikasnost: decreaseEfikasnost);
-        lastActionEvent = GameEventManager.EventsCompleted;
+        lastActionDay = GameEventManager.CurrentDay;
+        GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: {decreaseButtonText}.");
     }
 
@@ -373,7 +381,7 @@ public class BuildingInfo : MonoBehaviour
 
     private bool IsActionOnCooldown()
     {
-        return GetCooldownEventsRemaining() > 0;
+        return GetCooldownDaysRemaining() > 0;
     }
 
     private bool HasEnoughMoneyFor(int moneyChange)
@@ -388,15 +396,15 @@ public class BuildingInfo : MonoBehaviour
                (GameResources.Instance != null && GameResources.Instance.radnici >= -workerChange);
     }
 
-    private int GetCooldownEventsRemaining()
+    private int GetCooldownDaysRemaining()
     {
         if (actionCooldownEvents <= 0)
         {
             return 0;
         }
 
-        int eventsPassed = GameEventManager.EventsCompleted - lastActionEvent;
-        return Mathf.Max(0, actionCooldownEvents - eventsPassed);
+        int daysPassed = GameEventManager.CurrentDay - lastActionDay;
+        return Mathf.Max(0, actionCooldownEvents - daysPassed);
     }
 
     private void SetColor(Color color)
