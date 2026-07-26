@@ -18,6 +18,15 @@ public class DeliveryOrderTarget : MonoBehaviour
         }
     }
 
+    public int CompletedDeliveryCount
+    {
+        get
+        {
+            TerritoryHouse house = GetTerritoryHouse(false);
+            return house != null ? house.completedDeliveries : 0;
+        }
+    }
+
     public void Configure(DeliveryOrderManager orderOwner, int index)
     {
         owner = orderOwner;
@@ -49,6 +58,29 @@ public class DeliveryOrderTarget : MonoBehaviour
         RestoreColor();
     }
 
+    public bool RegisterCompletedDelivery()
+    {
+        TerritoryHouse house = GetTerritoryHouse(true);
+        if (house == null)
+        {
+            return false;
+        }
+
+        bool captured = house.RegisterDelivery();
+        if (house.IsPlayerOwned && targetRenderer != null)
+        {
+            RestoreColor();
+            targetRenderer.material.color = new Color(0.1f, 0.35f, 1f);
+        }
+
+        return captured;
+    }
+
+    public void DisableInteraction()
+    {
+        owner = null;
+    }
+
     public void Deactivate()
     {
         RestoreColor();
@@ -67,5 +99,34 @@ public class DeliveryOrderTarget : MonoBehaviour
             targetRenderer.material.color = originalColor;
             hasOriginalColor = false;
         }
+    }
+
+    private TerritoryHouse GetTerritoryHouse(bool create)
+    {
+        GameObject houseObject = targetRenderer != null ? targetRenderer.gameObject : gameObject;
+        TerritoryHouse house = houseObject.GetComponent<TerritoryHouse>();
+        if (house == null && create)
+        {
+            house = houseObject.AddComponent<TerritoryHouse>();
+        }
+
+        return house;
+    }
+}
+
+public class TerritoryHouse : MonoBehaviour
+{
+    public int completedDeliveries;
+
+    public bool IsPlayerOwned
+    {
+        get { return completedDeliveries >= 2; }
+    }
+
+    public bool RegisterDelivery()
+    {
+        bool wasPlayerOwned = IsPlayerOwned;
+        completedDeliveries++;
+        return !wasPlayerOwned && IsPlayerOwned;
     }
 }

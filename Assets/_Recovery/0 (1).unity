@@ -199149,20 +199149,10 @@ MonoBehaviour:
   decreaseButtonText: Keep it quiet
   increaseNovac: 80
   increaseRizik: 8
-  increaseReputacija: 5
-  increaseKvaliteta: 0
-  increaseStabilnost: 0
   increaseRadnici: 0
-  increaseMoral: 0
-  increaseEfikasnost: 0
   decreaseNovac: -40
   decreaseRizik: -7
-  decreaseReputacija: 0
-  decreaseKvaliteta: 0
-  decreaseStabilnost: 0
   decreaseRadnici: 0
-  decreaseMoral: 0
-  decreaseEfikasnost: 0
   hasUpgrade: 1
   upgradeLevel: 0
   maxUpgradeLevel: 2
@@ -199171,13 +199161,12 @@ MonoBehaviour:
   upgradeButtonText: Upgrade warehouse capacity
   upgradeDescription: Increase warehouse capacity by 100 grams.
   upgradeRizik: -3
-  upgradeReputacija: 5
-  upgradeKvaliteta: 0
-  upgradeStabilnost: 0
   upgradeRadnici: 0
-  upgradeMoral: 0
-  upgradeEfikasnost: 8
   producesGoods: 0
+  goodsPerBatch: 50
+  productionDurationSeconds: 30
+  productionWorkersRequired: 1
+  produceGoodsButtonText: Produce 50 g
   moveGoodsButtonText: Move goods from factory
   transferSpeed: 10
   warehouseCapacityPerUpgrade: 100
@@ -201499,6 +201488,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
   buildingName: Apartment
+  buildingRole: 0
   description: '"Sometimes the smartest move is to disappear."
 
 
@@ -201520,9 +201510,9 @@ MonoBehaviour:
   productionLevel: 0
   minProductionLevel: -2
   maxProductionLevel: 2
-  productionDescription: 'Spend 100 euros and one action to lay low and reduce risk
+  productionDescription: Spend 100 euros and one action to lay low and reduce risk
     by 20. The button is disabled when you cannot afford it. After using the apartment,
-    two days must pass before it can be used again.'
+    two days must pass before it can be used again.
   statusName: Safehouse status
   neutralStatusText: ready
   positiveStatusText: ready
@@ -201531,20 +201521,10 @@ MonoBehaviour:
   decreaseButtonText: Unused
   increaseNovac: -100
   increaseRizik: -20
-  increaseReputacija: 0
-  increaseKvaliteta: 0
-  increaseStabilnost: 0
   increaseRadnici: 0
-  increaseMoral: 0
-  increaseEfikasnost: 0
   decreaseNovac: 0
   decreaseRizik: 0
-  decreaseReputacija: 0
-  decreaseKvaliteta: 0
-  decreaseStabilnost: 0
   decreaseRadnici: 0
-  decreaseMoral: 0
-  decreaseEfikasnost: 0
   hasUpgrade: 1
   upgradeLevel: 0
   maxUpgradeLevel: 2
@@ -201554,12 +201534,15 @@ MonoBehaviour:
   upgradeDescription: Locks, blinds, burner phones, and a cleaner routine make the
     apartment safer when you need to disappear.
   upgradeRizik: -5
-  upgradeReputacija: 0
-  upgradeKvaliteta: 0
-  upgradeStabilnost: 8
   upgradeRadnici: 0
-  upgradeMoral: 5
-  upgradeEfikasnost: 0
+  producesGoods: 0
+  goodsPerBatch: 50
+  productionDurationSeconds: 30
+  productionWorkersRequired: 1
+  produceGoodsButtonText: Produce 50 g
+  moveGoodsButtonText: Move goods to store
+  transferSpeed: 10
+  warehouseCapacityPerUpgrade: 100
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   selectedColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!64 &1048367090
@@ -272142,22 +272125,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c08d8024726ed48449cf792eff515815, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameEventManager
+  actionsPerSide: 3
+  playerTurnDuration: 30
+  aiActionDelay: 0.6
   firstEventDelay: 0
   delayBetweenEvents: 30
   barHeight: 40
   popupWidth: 640
   popupHeight: 360
+  opponentTerritoryPercent: 30
+  playerTerritoryColor: {r: 0.1, g: 0.35, b: 1, a: 0.42}
+  neutralTerritoryColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.48}
+  opponentTerritoryColor: {r: 0.9, g: 0.1, b: 0.1, a: 0.42}
   popupBackground: {fileID: 2800000, guid: e2784459644be7348b4ec3e78c5783cc, type: 3}
   maleBackground: {fileID: 2800000, guid: e2784459644be7348b4ec3e78c5783cc, type: 3}
   femaleBackground: {fileID: 2800000, guid: e936c58e0ab3d5441a1c1378edfa4b18, type: 3}
   moneyIcon: {fileID: 2800000, guid: 242b4430c6f1a134ea42a9ef12fc5d3a, type: 3}
-  riskIcon: {fileID: 2800000, guid: a3ac026c44cb6124799f58e6cc188868, type: 3}
-  reputationIcon: {fileID: 2800000, guid: e31328dfee916cb4f9f8558f58ac6b8b, type: 3}
-  qualityIcon: {fileID: 2800000, guid: 57b78492824e0e9479155ae38582adc2, type: 3}
-  stabilityIcon: {fileID: 2800000, guid: 3999dd256a26422468b50d3d331f33c5, type: 3}
   workersIcon: {fileID: 2800000, guid: a045aa1c620bfea498bf0638921b162c, type: 3}
-  moraleIcon: {fileID: 2800000, guid: 1691b26b438e04e44867aa1f9d0a7e4a, type: 3}
-  efficiencyIcon: {fileID: 2800000, guid: bcb097b026ff2954da6a1896b77123a1, type: 3}
+  factoryIcon: {fileID: 0}
+  storeIcon: {fileID: 0}
+  riskIcon: {fileID: 2800000, guid: a3ac026c44cb6124799f58e6cc188868, type: 3}
+  influenceIcon: {fileID: 0}
   uiAudioSource: {fileID: 2141461661}
   popupOpenSound: {fileID: 8300000, guid: 8b2bda80580f9234c89c519471c5b280, type: 3}
   buttonClickSound: {fileID: 8300000, guid: 193b7d116cdfd5846bd97c0c208a2ca2, type: 3}
@@ -272184,6 +272172,7 @@ MonoBehaviour:
   utjecaj: 30
   radnici: 1
   placaRadnikaPoZadatku: 15
+  radniciZauzetiDoVremena: []
   policeRaidCount: 0
   maxPoliceRaids: 3
   gameOver: 0
@@ -273814,8 +273803,8 @@ MonoBehaviour:
   minProductionLevel: 0
   maxProductionLevel: 3
   productionDescription: "Hire a worker for 220 \u20AC or fire one who is not busy.
-    There is no daily wage. A worker is paid 15 \u20AC for each delivery and 15
-    \u20AC whenever production is started."
+    There is no daily wage. A worker is paid 15 \u20AC for each delivery and 15 \u20AC
+    whenever production is started."
   statusName: Hired workers from contact
   neutralStatusText: none
   positiveStatusText: active
@@ -273824,20 +273813,10 @@ MonoBehaviour:
   decreaseButtonText: Fire worker (-worker, -risk)
   increaseNovac: -220
   increaseRizik: 8
-  increaseReputacija: 0
-  increaseKvaliteta: 0
-  increaseStabilnost: 0
   increaseRadnici: 1
-  increaseMoral: 5
-  increaseEfikasnost: 15
   decreaseNovac: 0
   decreaseRizik: -8
-  decreaseReputacija: 0
-  decreaseKvaliteta: 0
-  decreaseStabilnost: 0
   decreaseRadnici: -1
-  decreaseMoral: -5
-  decreaseEfikasnost: -15
   hasUpgrade: 0
   upgradeLevel: 0
   maxUpgradeLevel: 2
@@ -273847,12 +273826,15 @@ MonoBehaviour:
   upgradeDescription: Build a trusted network around the contact. Better introductions
     mean fewer mistakes and workers who fit the operation faster.
   upgradeRizik: -4
-  upgradeReputacija: 0
-  upgradeKvaliteta: 0
-  upgradeStabilnost: 0
   upgradeRadnici: 0
-  upgradeMoral: 8
-  upgradeEfikasnost: 10
+  producesGoods: 0
+  goodsPerBatch: 50
+  productionDurationSeconds: 30
+  productionWorkersRequired: 1
+  produceGoodsButtonText: Produce 50 g
+  moveGoodsButtonText: Move goods to store
+  transferSpeed: 10
+  warehouseCapacityPerUpgrade: 100
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   selectedColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!1 &1431497536
@@ -291669,20 +291651,10 @@ MonoBehaviour:
   decreaseButtonText: Reduce production
   increaseNovac: 100
   increaseRizik: 10
-  increaseReputacija: 0
-  increaseKvaliteta: 0
-  increaseStabilnost: -3
   increaseRadnici: 0
-  increaseMoral: 0
-  increaseEfikasnost: 5
   decreaseNovac: -60
   decreaseRizik: -8
-  decreaseReputacija: 0
-  decreaseKvaliteta: 0
-  decreaseStabilnost: 3
   decreaseRadnici: 0
-  decreaseMoral: 0
-  decreaseEfikasnost: -5
   hasUpgrade: 0
   upgradeLevel: 0
   maxUpgradeLevel: 2
@@ -291692,12 +291664,7 @@ MonoBehaviour:
   upgradeDescription: Better equipment and basic soundproofing make production faster
     and harder to notice.
   upgradeRizik: -5
-  upgradeReputacija: 0
-  upgradeKvaliteta: 5
-  upgradeStabilnost: 5
   upgradeRadnici: 0
-  upgradeMoral: 0
-  upgradeEfikasnost: 12
   producesGoods: 1
   goodsPerBatch: 50
   productionDurationSeconds: 30

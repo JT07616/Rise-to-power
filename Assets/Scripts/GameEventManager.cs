@@ -33,9 +33,6 @@ public class GameEventManager : MonoBehaviour
     [Min(0f)] public float aiActionDelay = 0.6f;
 
     [Header("Timing")]
-    [Tooltip("Old linear story sequence. Keep disabled for the turn-based sandbox mode.")]
-    public bool enableLegacyStoryEvents = false;
-
     [Tooltip("Seconds before the first event after game start.")]
     public float firstEventDelay = 0f;
 
@@ -47,6 +44,12 @@ public class GameEventManager : MonoBehaviour
     public int popupWidth = 640;
     public int popupHeight = 420;
 
+    [Header("Mini map territory")]
+    [Range(0f, 100f)] public float opponentTerritoryPercent = 30f;
+    public Color playerTerritoryColor = new Color(0.1f, 0.35f, 1f, 0.42f);
+    public Color neutralTerritoryColor = new Color(0.45f, 0.45f, 0.45f, 0.48f);
+    public Color opponentTerritoryColor = new Color(0.9f, 0.1f, 0.1f, 0.42f);
+
 
     public Texture2D popupBackground;
     public Texture2D maleBackground;
@@ -54,13 +57,11 @@ public class GameEventManager : MonoBehaviour
 
     [Header("Resource bar icons")]
     public Texture2D moneyIcon;
-    public Texture2D riskIcon;
-    public Texture2D reputationIcon;
-    public Texture2D qualityIcon;
-    public Texture2D stabilityIcon;
     public Texture2D workersIcon;
-    public Texture2D moraleIcon;
-    public Texture2D efficiencyIcon;
+    public Texture2D factoryIcon;
+    public Texture2D storeIcon;
+    public Texture2D riskIcon;
+    public Texture2D influenceIcon;
 
     [Header("Audio")]
     public AudioSource uiAudioSource;
@@ -75,6 +76,21 @@ public class GameEventManager : MonoBehaviour
     private Func<GameEvent> pendingNext;
     private float previousTimeScale = 1f;
     private readonly Dictionary<Color, Texture2D> generatedResourceIcons = new Dictionary<Color, Texture2D>();
+    private Camera miniMapCamera;
+    private RenderTexture miniMapTexture;
+    private SimpleStrategyCamera strategyCamera;
+    private bool playerTerritoryOnLeft = true;
+    private readonly List<MiniMapParcel> miniMapParcels = new List<MiniMapParcel>();
+    private float miniMapParcelArea;
+
+    private class MiniMapParcel
+    {
+        public Vector3 center;
+        public Vector3 size;
+        public float area;
+        public bool playerOwned;
+        public GameObject source;
+    }
 
     void Awake()
     {
@@ -124,6 +140,8 @@ public class GameEventManager : MonoBehaviour
             gameObject.AddComponent<DeliveryOrderManager>();
         }
 
+        SetupMiniMap();
+
         if (CharacterSelect.playerCharacter == "Male")
         {
             popupBackground = maleBackground;
@@ -133,10 +151,6 @@ public class GameEventManager : MonoBehaviour
             popupBackground = femaleBackground;
         }
 
-        if (enableLegacyStoryEvents)
-        {
-            StartCoroutine(TriggerFirstEvent());
-        }
     }
 
     void Update()
@@ -187,16 +201,17 @@ public class GameEventManager : MonoBehaviour
         {
             ContinueGame();
         }
-    }
 
-    IEnumerator TriggerFirstEvent()
-    {
-        if (firstEventDelay > 0f)
+        if (miniMapCamera != null)
         {
-            yield return new WaitForSeconds(firstEventDelay);
+            Destroy(miniMapCamera.gameObject);
         }
 
-        ShowEvent(BuildEvent1_Arrival());
+        if (miniMapTexture != null)
+        {
+            miniMapTexture.Release();
+            Destroy(miniMapTexture);
+        }
     }
 
     void ShowEvent(GameEvent e)
@@ -378,110 +393,28 @@ public class GameEventManager : MonoBehaviour
         var R = GameResources.Instance;
         if (R == null || R.chapterEnded || R.gameOver) return;
 
-        if (R.theftPerCycle > 0 && UnityEngine.Random.Range(0, 100) < 20)
-        {
-            R.theftPerCycle = 0;
-            Debug.Log("🕵️ Lopov je prestao krasti.");
-        }
-
-        if (R.kvaliteta > 70 && R.reputacija > 20)
-        {
-            R.novac += 60;
-            Debug.Log("⭐ Premium proizvod + reputacija: bonus +60 €");
-            EnqueueNotification(
-                "⭐ Premium Bonus",
-                "Word is out: your product is the best in the district, " +
-                "and your name carries weight.\n\n+60 € bonus this cycle.");
-        }
-
-        float income = 40 + 30 * R.radnici + R.kvaliteta / 6f + R.reputacija / 6f;
-        income *= R.efikasnost / 100f;
-        if (R.blackMarketActive) income += 120;
-        if (R.incomePenaltyPercent > 0) income *= 1f - R.incomePenaltyPercent / 100f;
-        int incomeInt = Mathf.FloorToInt(income);
-        R.novac += incomeInt;
-        Debug.Log($"💰 Pasivni prihod: +{incomeInt} €");
-
-        if (R.salaryPerCycle > 0 && R.radnici > 0)
-        {
-            R.novac -= R.salaryPerCycle;
-            Debug.Log($"💸 Plaće: -{R.salaryPerCycle} €");
-        }
-
-        if (R.theftPerCycle > 0 && R.radnici > 0)
-        {
-            R.novac -= R.theftPerCycle;
-            Debug.Log($"🕵️ Krađa: -{R.theftPerCycle} €");
-        }
-
-        if (R.reputacija <= -30)
-        {
-            R.efikasnost -= 10;
-            Debug.Log("📉 Vrlo loša reputacija ruši efikasnost (-10).");
-        }
-
-        if (R.kvaliteta < 30)
-        {
-            R.reputacija -= 5;
-            Debug.Log("🧪 Loša kvaliteta ruši reputaciju (-5).");
-        }
-
-        if (R.stabilnost <= 0)
-        {
-            R.efikasnost -= 20;
-            R.rizik += 10;
-            Debug.Log("🏚️ Baza u raspadu: efikasnost -20, rizik +10.");
-            EnqueueNotification(
-                "🏚 Base Collapsing",
-                "Your base is falling apart. Walls leak, locks don't hold, " +
-                "everyone moves slower in the chaos.\n\n" +
-                "Efficiency −20\nRisk +10");
-        }
-
-        if (R.moral <= 0 && R.radnici > 0)
-        {
-            int lost = R.radnici;
-            Debug.Log("👥 Radnici su napustili organizaciju zbog niskog morala.");
-            R.radnici = 0;
-            R.efikasnost = Mathf.Max(50, R.efikasnost - 50);
-            EnqueueNotification(
-                "👥 Workers Walked Out",
-                "Morale hit zero. Every single worker packed up and left.\n\n" +
-                $"Workers: −{lost}\nEfficiency: −50 (floor 50)");
-        }
-
         if (R.rizik >= 100)
         {
             R.policeRaidCount++;
             int seizure = Mathf.Max(0, R.novac * 30 / 100);
             R.novac -= seizure;
-            R.reputacija -= 20;
             R.rizik = 30;
             int workerLost = 0;
-            int stabilityLoss = 0;
-            Debug.Log($"🚓 Policija te uhvatila! Zapljena: -{seizure} €, reputacija -20, rizik = 30.");
+            Debug.Log($"🚓 Policija te uhvatila! Zapljena: -{seizure} €, rizik = 30.");
             if (R.radnici > 0 && UnityEngine.Random.Range(0, 100) < 20)
             {
                 R.radnici -= 1;
                 workerLost = 1;
                 Debug.Log("🚓 Jedan radnik je uhvaćen.");
             }
-            if (UnityEngine.Random.Range(0, 100) < 15)
-            {
-                R.stabilnost -= 20;
-                stabilityLoss = 20;
-                Debug.Log("🚓 Šteta na bazi: stabilnost -20.");
-            }
 
             string body =
                 "Sirens. Doors kicked in. Half your stash is gone " +
                 "and your name is on every report tonight.\n\n" +
                 $"Money seized: −{seizure} €\n" +
-                "Reputation: −20\n" +
                 "Risk reset to 30\n" +
                 $"Police raids: {R.policeRaidCount}/{R.maxPoliceRaids}";
             if (workerLost > 0) body += "\nA worker was arrested (−1)";
-            if (stabilityLoss > 0) body += $"\nBase damaged (Stability −{stabilityLoss})";
             EnqueueNotification("🚓 POLICE RAID!", body);
 
             if (R.policeRaidCount >= R.maxPoliceRaids)
@@ -491,22 +424,6 @@ public class GameEventManager : MonoBehaviour
                     "The police have caught you too many times. " +
                     "After the last raid, there is no operation left to save.";
             }
-        }
-
-        if (R.novac < 0 && UnityEngine.Random.Range(0, 100) < 50)
-        {
-            R.novac -= 20;
-            R.reputacija -= 1;
-            Debug.Log("💸 Trošak duga: -20 €");
-        }
-
-        if (R.novac > 2000)
-        {
-            R.rizik += 5;
-            Debug.Log("💰 Velik profit privlači pažnju (+5 rizik)");
-            EnqueueNotification(
-                "💰 Drawing Attention",
-                "Money like yours doesn't move quietly. Eyes are on you now.\n\nRisk +5");
         }
 
         R.EvaluateGameOver();
@@ -545,6 +462,7 @@ public class GameEventManager : MonoBehaviour
         ShowEvent(builder());
     }
 
+#if false // Retained only as an archive of the disabled legacy story.
     GameEvent BuildEvent1_Arrival()
     {
         return new GameEvent
@@ -1851,10 +1769,13 @@ public class GameEventManager : MonoBehaviour
         };
     }
 
+#endif
+
     void OnGUI()
     {
         DrawResourceBar();
         DrawTurnPanel();
+        DrawMiniMap();
 
         if (IsPauseMenuOpen)
         {
@@ -1889,6 +1810,211 @@ public class GameEventManager : MonoBehaviour
             ? $"Day {CurrentDay}  |  Actions: {PlayerActionsRemaining}/{actionsPerSide}  |  Time: {Mathf.CeilToInt(PlayerTurnTimeRemaining)}s"
             : $"Day {CurrentDay}  |  AI actions: {AiActionsRemaining}/{actionsPerSide}";
         GUI.Label(new Rect(panelRect.x + 8f, panelRect.y + 8f, panelRect.width - 16f, 26f), status, statusStyle);
+    }
+
+    void SetupMiniMap()
+    {
+        strategyCamera = FindFirstObjectByType<SimpleStrategyCamera>();
+        if (strategyCamera == null)
+        {
+            return;
+        }
+
+        float centerX = (strategyCamera.minX + strategyCamera.maxX) * 0.5f;
+        float centerZ = (strategyCamera.minZ + strategyCamera.maxZ) * 0.5f;
+        float mapWidth = strategyCamera.maxX - strategyCamera.minX;
+        float mapHeight = strategyCamera.maxZ - strategyCamera.minZ;
+
+        GameObject cameraObject = new GameObject("Territory Mini Map Camera");
+        cameraObject.hideFlags = HideFlags.DontSave;
+        miniMapCamera = cameraObject.AddComponent<Camera>();
+        miniMapCamera.transform.position = new Vector3(centerX, 1000f, centerZ);
+        miniMapCamera.transform.rotation = Quaternion.Euler(90f, 0f, 90f);
+        miniMapCamera.orthographic = true;
+        const float textureAspect = 344f / 240f;
+        miniMapCamera.orthographicSize = Mathf.Max(mapWidth * 0.5f, mapHeight / (2f * textureAspect)) * 1.02f;
+        miniMapCamera.nearClipPlane = 0.1f;
+        miniMapCamera.farClipPlane = 2000f;
+        miniMapCamera.clearFlags = CameraClearFlags.SolidColor;
+        miniMapCamera.backgroundColor = new Color(0.08f, 0.08f, 0.08f);
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            miniMapCamera.cullingMask = mainCamera.cullingMask;
+        }
+
+        miniMapTexture = new RenderTexture(344, 240, 16)
+        {
+            name = "TerritoryMiniMap",
+            filterMode = FilterMode.Bilinear
+        };
+        miniMapCamera.targetTexture = miniMapTexture;
+
+        BuildingInfo[] buildings = FindObjectsByType<BuildingInfo>(FindObjectsSortMode.None);
+        if (buildings.Length > 0)
+        {
+            float averageX = 0f;
+            foreach (BuildingInfo building in buildings)
+            {
+                averageX += building.transform.position.x;
+            }
+            playerTerritoryOnLeft = averageX / buildings.Length <= centerX;
+        }
+
+        CacheMiniMapParcels();
+    }
+
+    void DrawMiniMap()
+    {
+        if (miniMapTexture == null || strategyCamera == null)
+        {
+            return;
+        }
+
+        const float width = 280f;
+        const float height = 220f;
+        const float margin = 12f;
+        Rect panel = new Rect(Screen.width - width - margin, Screen.height - height - margin, width, height);
+        Rect map = new Rect(panel.x + 8f, panel.y + 28f, panel.width - 16f, panel.height - 36f);
+
+        GUI.Box(panel, "CITY TERRITORY");
+        GUI.DrawTexture(map, miniMapTexture, ScaleMode.StretchToFill, false);
+
+        float playerPercent = Mathf.Clamp(GameResources.Instance != null ? GameResources.Instance.utjecaj : 30f, 0f, 70f);
+        float opponentPercent = Mathf.Clamp(opponentTerritoryPercent, 0f, 100f - playerPercent);
+        float neutralPercent = Mathf.Max(0f, 100f - playerPercent - opponentPercent);
+
+        DrawMiniMapTerritories(map, playerPercent, neutralPercent);
+
+        DrawMiniMapMarkers(map);
+        GUI.Label(new Rect(map.x + 4f, map.y + 2f, map.width - 8f, 22f),
+            $"You {playerPercent:0}%   Neutral {neutralPercent:0}%   Rival {opponentPercent:0}%");
+    }
+
+    void DrawMiniMapMarkers(Rect map)
+    {
+        BuildingInfo[] buildings = FindObjectsByType<BuildingInfo>(FindObjectsSortMode.None);
+        foreach (BuildingInfo building in buildings)
+        {
+            DrawMiniMapMarker(map, building.transform.position, Color.blue, 7f);
+        }
+
+        if (Camera.main != null)
+        {
+            DrawMiniMapMarker(map, Camera.main.transform.position, Color.white, 6f);
+        }
+    }
+
+    void DrawMiniMapMarker(Rect map, Vector3 worldPosition, Color color, float size)
+    {
+        float normalizedX = Mathf.InverseLerp(strategyCamera.minX, strategyCamera.maxX, worldPosition.x);
+        float normalizedZ = Mathf.InverseLerp(strategyCamera.minZ, strategyCamera.maxZ, worldPosition.z);
+        Rect marker = new Rect(
+            map.x + (1f - normalizedZ) * map.width - size * 0.5f,
+            map.y + (1f - normalizedX) * map.height - size * 0.5f,
+            size,
+            size);
+        DrawTerritoryRect(marker, color);
+    }
+
+    void CacheMiniMapParcels()
+    {
+        miniMapParcels.Clear();
+        miniMapParcelArea = 0f;
+        MeshCollider[] colliders = FindObjectsByType<MeshCollider>(FindObjectsSortMode.None);
+        HashSet<Renderer> usedRenderers = new HashSet<Renderer>();
+
+        foreach (MeshCollider collider in colliders)
+        {
+            if (collider == null || !collider.enabled || !collider.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            Renderer renderer = collider.GetComponent<Renderer>();
+            if (renderer == null)
+            {
+                renderer = collider.GetComponentInChildren<Renderer>();
+            }
+            if (renderer == null || !usedRenderers.Add(renderer))
+            {
+                continue;
+            }
+
+            Vector3 size = renderer.bounds.size;
+            if (size.y < 4f || Mathf.Max(size.x, size.z) < 3f)
+            {
+                continue;
+            }
+
+            float area = Mathf.Max(1f, size.x * size.z);
+            miniMapParcels.Add(new MiniMapParcel
+            {
+                center = renderer.bounds.center,
+                size = size,
+                area = area,
+                playerOwned = collider.GetComponentInParent<BuildingInfo>() != null,
+                source = renderer.gameObject
+            });
+            miniMapParcelArea += area;
+        }
+
+        miniMapParcels.Sort((a, b) => playerTerritoryOnLeft
+            ? a.center.x.CompareTo(b.center.x)
+            : b.center.x.CompareTo(a.center.x));
+    }
+
+    void DrawMiniMapTerritories(Rect map, float playerPercent, float neutralPercent)
+    {
+        if (miniMapParcelArea <= 0f)
+        {
+            return;
+        }
+
+        float playerAreaLimit = miniMapParcelArea * playerPercent / 100f;
+        float neutralAreaLimit = miniMapParcelArea * (playerPercent + neutralPercent) / 100f;
+        float accumulatedArea = 0f;
+
+        foreach (MiniMapParcel parcel in miniMapParcels)
+        {
+            float parcelMiddle = accumulatedArea + parcel.area * 0.5f;
+            Color color = parcelMiddle <= playerAreaLimit
+                ? playerTerritoryColor
+                : parcelMiddle <= neutralAreaLimit ? neutralTerritoryColor : opponentTerritoryColor;
+            TerritoryHouse territoryHouse = parcel.source != null
+                ? parcel.source.GetComponent<TerritoryHouse>()
+                : null;
+            if (parcel.playerOwned || (territoryHouse != null && territoryHouse.IsPlayerOwned))
+            {
+                color = playerTerritoryColor;
+            }
+
+            DrawMiniMapParcel(map, parcel, color);
+            accumulatedArea += parcel.area;
+        }
+    }
+
+    void DrawMiniMapParcel(Rect map, MiniMapParcel parcel, Color color)
+    {
+        float normalizedX = Mathf.InverseLerp(strategyCamera.minX, strategyCamera.maxX, parcel.center.x);
+        float normalizedZ = Mathf.InverseLerp(strategyCamera.minZ, strategyCamera.maxZ, parcel.center.z);
+        float width = Mathf.Max(2f, parcel.size.z / (strategyCamera.maxZ - strategyCamera.minZ) * map.width);
+        float height = Mathf.Max(2f, parcel.size.x / (strategyCamera.maxX - strategyCamera.minX) * map.height);
+        Rect rect = new Rect(
+            map.x + (1f - normalizedZ) * map.width - width * 0.5f,
+            map.y + (1f - normalizedX) * map.height - height * 0.5f,
+            width,
+            height);
+        DrawTerritoryRect(rect, color);
+    }
+
+    void DrawTerritoryRect(Rect rect, Color color)
+    {
+        Color previousColor = GUI.color;
+        GUI.color = color;
+        GUI.DrawTexture(rect, Texture2D.whiteTexture);
+        GUI.color = previousColor;
     }
 
     void DrawPauseMenu()
@@ -1967,13 +2093,12 @@ public class GameEventManager : MonoBehaviour
         string[] resourceTexts =
         {
             $"Money: {r.novac} €",
-            $"Risk: {r.rizik}",
-            $"Reputation: {r.reputacija}",
-            $"Quality: {r.kvaliteta}",
-            $"Stability: {r.stabilnost}",
-            $"Workers: {r.radnici}",
-            $"Morale: {r.moral}",
-            $"Efficiency: {r.efikasnost}%"
+            $"Factory: {r.robaUTvornici}/{r.kapacitetTvornice} g",
+            $"Store: {r.robaUSkladistu}/{r.kapacitetSkladista} g" +
+                (r.robaUTransportu > 0 ? $" (+{r.robaUTransportu} g moving)" : ""),
+            $"Workers: {r.SlobodniRadnici}/{r.radnici} free",
+            $"Risk: {r.rizik}/100 (Raids {r.policeRaidCount}/{r.maxPoliceRaids})",
+            $"Influence: {r.utjecaj}%"
         };
 
         GUIStyle style = new GUIStyle(GUI.skin.label)
@@ -2010,13 +2135,11 @@ public class GameEventManager : MonoBehaviour
 
         float x = horizontalPadding;
         DrawResourceItem(ref x, moneyIcon, new Color(0.95f, 0.78f, 0.2f), resourceTexts[0], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, riskIcon, new Color(0.95f, 0.25f, 0.2f), resourceTexts[1], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, reputationIcon, new Color(0.45f, 0.7f, 1f), resourceTexts[2], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, qualityIcon, new Color(0.45f, 0.95f, 0.65f), resourceTexts[3], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, stabilityIcon, new Color(0.65f, 0.55f, 0.45f), resourceTexts[4], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, workersIcon, new Color(0.95f, 0.55f, 0.25f), resourceTexts[5], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, moraleIcon, new Color(1f, 0.55f, 0.75f), resourceTexts[6], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, efficiencyIcon, new Color(0.65f, 0.65f, 0.95f), resourceTexts[7], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, factoryIcon, new Color(0.45f, 0.95f, 0.65f), resourceTexts[1], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, storeIcon, new Color(0.35f, 0.8f, 0.55f), resourceTexts[2], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, workersIcon, new Color(0.95f, 0.55f, 0.25f), resourceTexts[3], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, riskIcon, new Color(0.95f, 0.25f, 0.2f), resourceTexts[4], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, influenceIcon, new Color(0.45f, 0.7f, 1f), resourceTexts[5], style, iconSize, iconTextGap, itemGap);
     }
 
     void DrawResourceItem(ref float x, Texture2D icon, Color fallbackColor, string text, GUIStyle style,

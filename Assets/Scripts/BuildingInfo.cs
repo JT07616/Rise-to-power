@@ -1,8 +1,17 @@
 using UnityEngine;
 
+public enum BuildingRole
+{
+    General,
+    Factory,
+    WorkerContact,
+    Warehouse
+}
+
 public class BuildingInfo : MonoBehaviour
 {
     public string buildingName = "Building";
+    public BuildingRole buildingRole = BuildingRole.General;
 
     [TextArea(2, 5)]
     public string description = "Short description of this building.";
@@ -42,22 +51,12 @@ public class BuildingInfo : MonoBehaviour
     [Header("Increase action effects")]
     public int increaseNovac = 100;
     public int increaseRizik = 10;
-    public int increaseReputacija = 0;
-    public int increaseKvaliteta = 0;
-    public int increaseStabilnost = -3;
     public int increaseRadnici = 0;
-    public int increaseMoral = 0;
-    public int increaseEfikasnost = 5;
 
     [Header("Decrease action effects")]
     public int decreaseNovac = -60;
     public int decreaseRizik = -8;
-    public int decreaseReputacija = 0;
-    public int decreaseKvaliteta = 0;
-    public int decreaseStabilnost = 3;
     public int decreaseRadnici = 0;
-    public int decreaseMoral = 0;
-    public int decreaseEfikasnost = -5;
 
     [Header("Upgrade")]
     public bool hasUpgrade = false;
@@ -71,12 +70,17 @@ public class BuildingInfo : MonoBehaviour
     public string upgradeDescription = "Improve this location for long-term benefits.";
 
     public int upgradeRizik = -5;
-    public int upgradeReputacija = 0;
-    public int upgradeKvaliteta = 0;
-    public int upgradeStabilnost = 5;
     public int upgradeRadnici = 0;
-    public int upgradeMoral = 0;
-    public int upgradeEfikasnost = 10;
+
+    [Header("Goods production")]
+    public bool producesGoods = false;
+    [Min(1)] public int goodsPerBatch = 50;
+    [Min(1f)] public float productionDurationSeconds = 30f;
+    [Min(1)] public int productionWorkersRequired = 1;
+    public string produceGoodsButtonText = "Produce 50 g";
+    public string moveGoodsButtonText = "Move goods to store";
+    [Min(0.1f)] public float transferSpeed = 10f;
+    [Min(1)] public int warehouseCapacityPerUpgrade = 100;
 
     public Color hoverColor = Color.yellow;
     public Color selectedColor = Color.blue;
@@ -84,6 +88,12 @@ public class BuildingInfo : MonoBehaviour
     private Renderer[] renderers;
     private Color[] originalColors;
     private int lastActionDay = -1000;
+    private float productionFinishTime = -1f;
+
+    public bool IsProducingGoods
+    {
+        get { return producesGoods && productionFinishTime > Time.time; }
+    }
 
     void Awake()
     {
@@ -94,6 +104,19 @@ public class BuildingInfo : MonoBehaviour
         {
             originalColors[i] = renderers[i].material.color;
         }
+    }
+
+    void Update()
+    {
+        if (!producesGoods || productionFinishTime < 0f ||
+            Time.time < productionFinishTime || GameResources.Instance == null)
+        {
+            return;
+        }
+
+        GameResources.Instance.AddFactoryGoods(goodsPerBatch);
+        Debug.Log($"{buildingName}: production finished, +{goodsPerBatch} g.");
+        productionFinishTime = -1f;
     }
 
     public void ShowHover()
@@ -131,8 +154,21 @@ public class BuildingInfo : MonoBehaviour
             return fullDescription + "\n\n" + purchaseDescription + $"\n\nPrice: {purchaseCost} €";
         }
 
-        fullDescription += "\n\n" + GetProductionStatus();
-        fullDescription += "\n\n" + GetActionDescriptions();
+        if (showIncreaseAction || showDecreaseAction)
+        {
+            fullDescription += "\n\n" + GetProductionStatus();
+            fullDescription += "\n\n" + GetActionDescriptions();
+        }
+
+        if (producesGoods)
+        {
+            fullDescription += "\n\n" + GetGoodsProductionStatus();
+        }
+
+        if (buildingRole == BuildingRole.Warehouse)
+        {
+            fullDescription += "\n\n" + GetWarehouseStatus();
+        }
 
         if (hasUpgrade)
         {
@@ -168,6 +204,16 @@ public class BuildingInfo : MonoBehaviour
         return GetShortButtonLabel(upgradeButtonText);
     }
 
+    public string GetProduceGoodsButtonLabel()
+    {
+        return GetShortButtonLabel(produceGoodsButtonText);
+    }
+
+    public string GetMoveGoodsButtonLabel()
+    {
+        return GetShortButtonLabel(moveGoodsButtonText);
+    }
+
     public bool IsUnlocked()
     {
         return !requiresPurchase || isPurchased;
@@ -187,9 +233,10 @@ public class BuildingInfo : MonoBehaviour
             return;
         }
 
-        GameResources.Instance.Apply(
-            dNovac: -purchaseCost, dRizik: 0, dReputacija: 0, dKvaliteta: 0,
-            dStabilnost: 0, dRadnici: 0, dMoral: 0, dEfikasnost: 0);
+        if (!ApplyActionEffects(-purchaseCost, 0, 0))
+        {
+            return;
+        }
         isPurchased = true;
         GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: location bought for {purchaseCost} €.");
@@ -202,6 +249,70 @@ public class BuildingInfo : MonoBehaviour
                HasEnoughMoneyFor(-GetUpgradeCost());
     }
 
+    public bool CanProduceGoods()
+    {
+        return producesGoods && IsUnlocked() && !IsProducingGoods &&
+               GameEventManager.CanPlayerAct && GameResources.Instance != null &&
+               GameResources.Instance.CanAfford(GameResources.Instance.placaRadnikaPoZadatku) &&
+               GameResources.Instance.robaUTvornici + goodsPerBatch <= GameResources.Instance.kapacitetTvornice &&
+               GameResources.Instance.SlobodniRadnici >= productionWorkersRequired;
+    }
+
+    public void StartGoodsProduction()
+    {
+        if (!CanProduceGoods())
+        {
+            return;
+        }
+
+        GameResources resources = GameResources.Instance;
+        if (!resources.TryAssignWorkers(productionWorkersRequired, productionDurationSeconds))
+        {
+            return;
+        }
+
+        if (!ApplyActionEffects(-resources.placaRadnikaPoZadatku, 0, 0))
+        {
+            return;
+        }
+        productionFinishTime = Time.time + productionDurationSeconds;
+        GameEventManager.CompletePlayerAction();
+        Debug.Log($"{buildingName}: production started; {goodsPerBatch} g ready in {productionDurationSeconds:0} seconds.");
+    }
+
+    public bool CanMoveGoods()
+    {
+        if ((buildingRole != BuildingRole.Factory && buildingRole != BuildingRole.Warehouse) ||
+            !IsUnlocked() || !GameEventManager.CanPlayerAct || GameResources.Instance == null)
+        {
+            return false;
+        }
+
+        BuildingInfo factory = FindBuilding(BuildingRole.Factory);
+        BuildingInfo warehouse = FindBuilding(BuildingRole.Warehouse);
+        return factory != null && warehouse != null && warehouse.IsUnlocked() &&
+               !GameResources.Instance.TransportUTijeku && GameResources.Instance.robaUTvornici > 0 &&
+               GameResources.Instance.robaUSkladistu < GameResources.Instance.kapacitetSkladista &&
+               GameResources.Instance.SlobodniRadnici > 0;
+    }
+
+    public void MoveGoodsToWarehouse()
+    {
+        if (!CanMoveGoods())
+        {
+            return;
+        }
+
+        float duration = GetTransferDurationSeconds();
+        if (!GameResources.Instance.TryStartFactoryTransfer(duration))
+        {
+            return;
+        }
+
+        GameEventManager.CompletePlayerAction();
+        Debug.Log($"Goods transfer started. Travel time: {duration:0} seconds.");
+    }
+
     public void Upgrade()
     {
         if (!CanUpgrade() || GameResources.Instance == null)
@@ -210,10 +321,16 @@ public class BuildingInfo : MonoBehaviour
         }
 
         int cost = GetUpgradeCost();
+        if (!ApplyActionEffects(-cost, upgradeRizik, upgradeRadnici))
+        {
+            return;
+        }
+
         upgradeLevel++;
-        GameResources.Instance.Apply(
-            dNovac: -cost, dRizik: upgradeRizik, dReputacija: upgradeReputacija, dKvaliteta: upgradeKvaliteta,
-            dStabilnost: upgradeStabilnost, dRadnici: upgradeRadnici, dMoral: upgradeMoral, dEfikasnost: upgradeEfikasnost);
+        if (buildingRole == BuildingRole.Warehouse)
+        {
+            GameResources.Instance.kapacitetSkladista += warehouseCapacityPerUpgrade;
+        }
         GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: upgraded to level {upgradeLevel}/{maxUpgradeLevel} for {cost} €.");
     }
@@ -249,14 +366,16 @@ public class BuildingInfo : MonoBehaviour
             return;
         }
 
+        if (!ApplyActionEffects(increaseNovac, increaseRizik, increaseRadnici))
+        {
+            return;
+        }
+
         if (actionsChangeLevel)
         {
             productionLevel++;
         }
 
-        GameResources.Instance.Apply(
-            dNovac: increaseNovac, dRizik: increaseRizik, dReputacija: increaseReputacija, dKvaliteta: increaseKvaliteta,
-            dStabilnost: increaseStabilnost, dRadnici: increaseRadnici, dMoral: increaseMoral, dEfikasnost: increaseEfikasnost);
         lastActionDay = GameEventManager.CurrentDay;
         GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: {increaseButtonText}.");
@@ -269,14 +388,16 @@ public class BuildingInfo : MonoBehaviour
             return;
         }
 
+        if (!ApplyActionEffects(decreaseNovac, decreaseRizik, decreaseRadnici))
+        {
+            return;
+        }
+
         if (actionsChangeLevel)
         {
             productionLevel = Mathf.Max(minProductionLevel, productionLevel - 1);
         }
 
-        GameResources.Instance.Apply(
-            dNovac: decreaseNovac, dRizik: decreaseRizik, dReputacija: decreaseReputacija, dKvaliteta: decreaseKvaliteta,
-            dStabilnost: decreaseStabilnost, dRadnici: decreaseRadnici, dMoral: decreaseMoral, dEfikasnost: decreaseEfikasnost);
         lastActionDay = GameEventManager.CurrentDay;
         GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: {decreaseButtonText}.");
@@ -293,39 +414,87 @@ public class BuildingInfo : MonoBehaviour
         return $"{statusName}: {label} ({productionLevel}/{maxProductionLevel})";
     }
 
+    private string GetGoodsProductionStatus()
+    {
+        if (IsProducingGoods)
+        {
+            return $"Production: {Mathf.CeilToInt(productionFinishTime - Time.time)} seconds remaining.";
+        }
+
+        GameResources resources = GameResources.Instance;
+        string stock = resources == null ? "" :
+            $" Factory stock: {resources.robaUTvornici}/{resources.kapacitetTvornice} g.";
+        string workerPay = resources == null ? "" : $" Worker pay: {resources.placaRadnikaPoZadatku} €.";
+        return $"Production: {goodsPerBatch} g in {productionDurationSeconds:0} seconds, " +
+               $"requires {productionWorkersRequired} free worker(s).{workerPay}{stock}";
+    }
+
+    private string GetWarehouseStatus()
+    {
+        GameResources resources = GameResources.Instance;
+        if (resources == null)
+        {
+            return "Warehouse unavailable.";
+        }
+
+        string transfer = resources.TransportUTijeku ? $" {resources.robaUTransportu} g is being moved." : "";
+        return $"Warehouse: {resources.robaUSkladistu}/{resources.kapacitetSkladista} g.{transfer}";
+    }
+
+    private float GetTransferDurationSeconds()
+    {
+        BuildingInfo factory = FindBuilding(BuildingRole.Factory);
+        BuildingInfo warehouse = FindBuilding(BuildingRole.Warehouse);
+        if (factory == null || warehouse == null)
+        {
+            return 5f;
+        }
+
+        return Mathf.Max(5f, Vector3.Distance(factory.transform.position, warehouse.transform.position) / transferSpeed);
+    }
+
+    private static BuildingInfo FindBuilding(BuildingRole role)
+    {
+        BuildingInfo[] buildings = FindObjectsByType<BuildingInfo>(FindObjectsSortMode.None);
+        foreach (BuildingInfo building in buildings)
+        {
+            if (building.buildingRole == role)
+            {
+                return building;
+            }
+        }
+
+        return null;
+    }
+
     private string GetActionDescriptions()
     {
         string actionText = "Choices:";
 
         if (showIncreaseAction)
         {
-            actionText += $"\n- {GetIncreaseButtonLabel()}: {DescribeEffects(increaseNovac, increaseRizik, increaseReputacija, increaseKvaliteta, increaseStabilnost, increaseRadnici, increaseMoral, increaseEfikasnost)}";
+            actionText += $"\n- {GetIncreaseButtonLabel()}: {DescribeEffects(increaseNovac, increaseRizik, increaseRadnici)}";
         }
 
         if (showDecreaseAction)
         {
-            actionText += $"\n- {GetDecreaseButtonLabel()}: {DescribeEffects(decreaseNovac, decreaseRizik, decreaseReputacija, decreaseKvaliteta, decreaseStabilnost, decreaseRadnici, decreaseMoral, decreaseEfikasnost)}";
+            actionText += $"\n- {GetDecreaseButtonLabel()}: {DescribeEffects(decreaseNovac, decreaseRizik, decreaseRadnici)}";
         }
 
         if (hasUpgrade && upgradeLevel < maxUpgradeLevel)
         {
-            actionText += $"\n- {GetUpgradeButtonLabel()}: costs {GetUpgradeCost()} €. {DescribeEffects(0, upgradeRizik, upgradeReputacija, upgradeKvaliteta, upgradeStabilnost, upgradeRadnici, upgradeMoral, upgradeEfikasnost)}";
+            actionText += $"\n- {GetUpgradeButtonLabel()}: costs {GetUpgradeCost()} €. {DescribeEffects(0, upgradeRizik, upgradeRadnici)}";
         }
 
         return actionText;
     }
 
-    private string DescribeEffects(int money, int risk, int reputation, int quality, int stability, int workers, int morale, int efficiency)
+    private string DescribeEffects(int money, int risk, int workers)
     {
         string effects = "";
         AddEffect(ref effects, money, "€", true);
         AddEffect(ref effects, risk, "risk");
-        AddEffect(ref effects, reputation, "reputation");
-        AddEffect(ref effects, quality, "quality");
-        AddEffect(ref effects, stability, "stability");
         AddEffect(ref effects, workers, "worker");
-        AddEffect(ref effects, morale, "morale");
-        AddEffect(ref effects, efficiency, "efficiency");
 
         return string.IsNullOrEmpty(effects) ? "no direct resource change." : effects + ".";
     }
@@ -387,13 +556,25 @@ public class BuildingInfo : MonoBehaviour
     private bool HasEnoughMoneyFor(int moneyChange)
     {
         return moneyChange >= 0 ||
-               (GameResources.Instance != null && GameResources.Instance.novac >= -moneyChange);
+               (GameResources.Instance != null && GameResources.Instance.CanAfford(-moneyChange));
+    }
+
+    private bool ApplyActionEffects(int money, int risk, int workers)
+    {
+        GameResources resources = GameResources.Instance;
+        if (resources == null || (money < 0 && !resources.TrySpendMoney(-money)))
+        {
+            return false;
+        }
+
+        resources.Apply(dNovac: Mathf.Max(0, money), dRizik: risk, dRadnici: workers);
+        return true;
     }
 
     private bool HasEnoughWorkersFor(int workerChange)
     {
         return workerChange >= 0 ||
-               (GameResources.Instance != null && GameResources.Instance.radnici >= -workerChange);
+               (GameResources.Instance != null && GameResources.Instance.SlobodniRadnici >= -workerChange);
     }
 
     private int GetCooldownDaysRemaining()

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class GameResources : MonoBehaviour
@@ -5,30 +6,43 @@ public class GameResources : MonoBehaviour
     public static GameResources Instance { get; private set; }
 
     [Header("Resursi")]
-    public int novac = 200;
+    public int novac = 500;
+    public int robaUTvornici = 50;
+    public int robaUSkladistu = 0;
+    public int robaUTransportu = 0;
+    [Min(1)] public int kapacitetTvornice = 100;
+    [Min(1)] public int kapacitetSkladista = 100;
     public int rizik = 10;
-    public int reputacija = 0;
-    public int kvaliteta = 50;
-    public int stabilnost = 50;
-    public int radnici = 0;
-    public int moral = 50;
-    public int efikasnost = 100;
+    [Range(0, 100)] public int utjecaj = 30;
+    public int radnici = 1;
 
-    [Header("Long-term flags")]
-    public int workerMistakeChanceBonus = 0;
-    public bool suspiciousNeighborIgnored = false;
-    public int badBatchChanceBonus = 0;
-    public int betrayalChanceLateGame = 0;
-    public int theftPerCycle = 0;
-    public bool rivalActive = false;
-    public int incomePenaltyPercent = 0;
-    public int salaryPerCycle = 0;
-    public int departureChance = 0;
-    public bool blackMarketActive = false;
-    public int jobsBonusPercent = 0;
-    public bool preparedDefense = false;
-    public int futureAttackDamageBonus = 0;
-    public bool baseDefended = false;
+    [Header("Radnici")]
+    [Min(0)] public int placaRadnikaPoZadatku = 15;
+    [SerializeField] private List<float> radniciZauzetiDoVremena = new List<float>();
+
+    private float zavrsetakTransporta = -1f;
+
+    public int UkupnoRobe
+    {
+        get { return robaUTvornici + robaUSkladistu + robaUTransportu; }
+    }
+
+    public bool TransportUTijeku
+    {
+        get { return robaUTransportu > 0; }
+    }
+
+    public int ZauzetiRadnici
+    {
+        get { return radniciZauzetiDoVremena.Count; }
+    }
+
+    public int SlobodniRadnici
+    {
+        get { return Mathf.Max(0, radnici - ZauzetiRadnici); }
+    }
+
+    [Header("Police")]
     public int policeRaidCount = 0;
     public int maxPoliceRaids = 3;
 
@@ -47,20 +61,101 @@ public class GameResources : MonoBehaviour
         Instance = this;
     }
 
-    public void Apply(int dNovac, int dRizik, int dReputacija, int dKvaliteta,
-                     int dStabilnost, int dRadnici, int dMoral, int dEfikasnost)
+    void Update()
+    {
+        ReleaseFinishedWorkers();
+
+        if (TransportUTijeku && Time.time >= zavrsetakTransporta)
+        {
+            robaUSkladistu += robaUTransportu;
+            robaUTransportu = 0;
+            zavrsetakTransporta = -1f;
+            Debug.Log("Goods transfer to the warehouse completed.");
+        }
+    }
+
+    public void Apply(int dNovac, int dRizik, int dRadnici)
     {
         novac += dNovac;
         rizik += dRizik;
-        reputacija += dReputacija;
-        kvaliteta += dKvaliteta;
-        stabilnost += dStabilnost;
         radnici += dRadnici;
-        moral += dMoral;
-        efikasnost += dEfikasnost;
 
         EvaluateGameOver();
         Clamp();
+    }
+
+    public void AddFactoryGoods(int amount)
+    {
+        robaUTvornici = Mathf.Clamp(robaUTvornici + amount, 0, kapacitetTvornice);
+    }
+
+    public bool CanAfford(int amount)
+    {
+        return amount >= 0 && novac >= amount;
+    }
+
+    public bool TrySpendMoney(int amount)
+    {
+        if (!CanAfford(amount))
+        {
+            return false;
+        }
+
+        novac -= amount;
+        return true;
+    }
+
+    public bool TryConsumeWarehouseGoods(int amount)
+    {
+        if (amount < 0 || robaUSkladistu < amount)
+        {
+            return false;
+        }
+
+        robaUSkladistu -= amount;
+        return true;
+    }
+
+    public bool TryAssignWorkers(int count, float durationSeconds)
+    {
+        ReleaseFinishedWorkers();
+        if (count <= 0 || SlobodniRadnici < count)
+        {
+            return false;
+        }
+
+        float busyUntilTime = Time.time + Mathf.Max(0.1f, durationSeconds);
+        for (int i = 0; i < count; i++)
+        {
+            radniciZauzetiDoVremena.Add(busyUntilTime);
+        }
+
+        return true;
+    }
+
+    public bool TryStartFactoryTransfer(float durationSeconds)
+    {
+        int freeWarehouseSpace = kapacitetSkladista - robaUSkladistu;
+        int amount = Mathf.Min(robaUTvornici, freeWarehouseSpace);
+        if (TransportUTijeku || amount <= 0 || !TryAssignWorkers(1, durationSeconds))
+        {
+            return false;
+        }
+
+        robaUTvornici -= amount;
+        robaUTransportu = amount;
+        zavrsetakTransporta = Time.time + durationSeconds;
+        return true;
+    }
+
+    public void ReleaseFinishedWorkers()
+    {
+        radniciZauzetiDoVremena.RemoveAll(time => time <= Time.time);
+    }
+
+    public void AddInfluence(int amount)
+    {
+        utjecaj = Mathf.Clamp(utjecaj + amount, 0, 100);
     }
 
     public void EvaluateGameOver()
@@ -75,25 +170,16 @@ public class GameResources : MonoBehaviour
             gameOver = true;
             gameOverReason = "You ran out of money. Without cash, the operation cannot continue.";
         }
-        else if (stabilnost <= -50)
-        {
-            gameOver = true;
-            gameOverReason = "The base is too damaged to use. The operation collapses with it.";
-        }
-        else if (reputacija < 0)
-        {
-            gameOver = true;
-            gameOverReason = "Your reputation is gone. No one trusts you enough to keep doing business.";
-        }
     }
 
     public void Clamp()
     {
-        kvaliteta = Mathf.Clamp(kvaliteta, 0, 100);
-        stabilnost = Mathf.Clamp(stabilnost, -100, 100);
-        reputacija = Mathf.Max(0, reputacija);
-        moral = Mathf.Clamp(moral, -100, 100);
-        efikasnost = Mathf.Clamp(efikasnost, 0, 300);
+        kapacitetTvornice = Mathf.Max(1, kapacitetTvornice);
+        kapacitetSkladista = Mathf.Max(1, kapacitetSkladista);
+        robaUTvornici = Mathf.Clamp(robaUTvornici, 0, kapacitetTvornice);
+        robaUSkladistu = Mathf.Clamp(robaUSkladistu, 0, kapacitetSkladista);
+        robaUTransportu = Mathf.Max(0, robaUTransportu);
+        utjecaj = Mathf.Clamp(utjecaj, 0, 100);
         rizik = Mathf.Max(0, rizik);
         radnici = Mathf.Max(0, radnici);
     }

@@ -35,6 +35,14 @@ public class BuildingPopupUI : MonoBehaviour
         }
     }
 
+    void Update()
+    {
+        if (IsOpen && currentBuilding != null)
+        {
+            RefreshText();
+        }
+    }
+
     public void Show(BuildingInfo building)
     {
         if (building == null)
@@ -79,6 +87,11 @@ public class BuildingPopupUI : MonoBehaviour
             return;
         }
 
+        if (DeliveryOrderManager.IsPopupOpen)
+        {
+            return;
+        }
+
         Rect panelRect = GetPanelScreenRect();
         float buttonHeight = 38f;
         float gap = 12f;
@@ -103,10 +116,37 @@ public class BuildingPopupUI : MonoBehaviour
         }
 
         int buttonIndex = 0;
+        if (currentBuilding.producesGoods)
+        {
+            GUI.enabled = currentBuilding.CanProduceGoods();
+            if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetProduceGoodsButtonLabel()))
+            {
+                PlayButtonClick();
+                currentBuilding.StartGoodsProduction();
+                RefreshText();
+            }
+            buttonIndex++;
+        }
+
+        if (currentBuilding.buildingRole == BuildingRole.Factory ||
+            currentBuilding.buildingRole == BuildingRole.Warehouse)
+        {
+            GUI.enabled = currentBuilding.CanMoveGoods();
+            float buttonX = x + buttonIndex * (buttonWidth + gap);
+            if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetMoveGoodsButtonLabel()))
+            {
+                PlayButtonClick();
+                currentBuilding.MoveGoodsToWarehouse();
+                RefreshText();
+            }
+            buttonIndex++;
+        }
+
         if (currentBuilding.showIncreaseAction)
         {
             GUI.enabled = currentBuilding.CanIncreaseProduction();
-            if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetIncreaseButtonLabel()))
+            float buttonX = x + buttonIndex * (buttonWidth + gap);
+            if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetIncreaseButtonLabel()))
             {
                 PlayButtonClick();
                 currentBuilding.IncreaseProduction();
@@ -151,6 +191,17 @@ public class BuildingPopupUI : MonoBehaviour
         }
 
         int count = 0;
+        if (currentBuilding.producesGoods)
+        {
+            count++;
+        }
+
+        if (currentBuilding.buildingRole == BuildingRole.Factory ||
+            currentBuilding.buildingRole == BuildingRole.Warehouse)
+        {
+            count++;
+        }
+
         if (currentBuilding.showIncreaseAction)
         {
             count++;

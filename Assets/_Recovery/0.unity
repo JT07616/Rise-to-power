@@ -199178,6 +199178,11 @@ MonoBehaviour:
   upgradeMoral: 0
   upgradeEfikasnost: 8
   producesGoods: 0
+  goodsPerBatch: 50
+  productionDurationSeconds: 30
+  productionWorkersRequired: 1
+  productionCost: 0
+  produceGoodsButtonText: Produce 50 g
   moveGoodsButtonText: Move goods from factory
   transferSpeed: 10
   warehouseCapacityPerUpgrade: 100
@@ -201499,6 +201504,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
   buildingName: Apartment
+  buildingRole: 0
   description: '"Sometimes the smartest move is to disappear."
 
 
@@ -201520,17 +201526,16 @@ MonoBehaviour:
   productionLevel: 0
   minProductionLevel: -2
   maxProductionLevel: 2
-  productionDescription: 'Spend 100 euros and one action to lay low and reduce risk
-    by 20. The button is disabled when you cannot afford it. After using the apartment,
-    two days must pass before it can be used again.'
+  productionDescription: 'Lay low here to lower risk by 10. You cannot do it constantly:
+    after using the apartment, two events must pass before it helps again.'
   statusName: Safehouse status
   neutralStatusText: ready
   positiveStatusText: ready
   negativeStatusText: ready
-  increaseButtonText: "Lay low (-100 \u20AC, -20 risk)"
+  increaseButtonText: Lay low (-10 risk)
   decreaseButtonText: Unused
-  increaseNovac: -100
-  increaseRizik: -20
+  increaseNovac: 0
+  increaseRizik: -10
   increaseReputacija: 0
   increaseKvaliteta: 0
   increaseStabilnost: 0
@@ -201560,6 +201565,15 @@ MonoBehaviour:
   upgradeRadnici: 0
   upgradeMoral: 5
   upgradeEfikasnost: 0
+  producesGoods: 0
+  goodsPerBatch: 50
+  productionDurationSeconds: 30
+  productionWorkersRequired: 1
+  productionCost: 0
+  produceGoodsButtonText: Produce 50 g
+  moveGoodsButtonText: Move goods to store
+  transferSpeed: 10
+  warehouseCapacityPerUpgrade: 100
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   selectedColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!64 &1048367090
@@ -272142,6 +272156,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c08d8024726ed48449cf792eff515815, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameEventManager
+  actionsPerSide: 3
+  playerTurnDuration: 30
+  aiActionDelay: 0.6
+  enableLegacyStoryEvents: 0
   firstEventDelay: 0
   delayBetweenEvents: 30
   barHeight: 40
@@ -272181,9 +272199,29 @@ MonoBehaviour:
   kapacitetTvornice: 100
   kapacitetSkladista: 100
   rizik: 10
-  utjecaj: 30
+  utjecaj: 0
+  reputacija: 0
+  kvaliteta: 50
+  stabilnost: 50
   radnici: 1
-  placaRadnikaPoZadatku: 15
+  moral: 50
+  efikasnost: 100
+  placaPoRadnikuDnevno: 40
+  radniciZauzetiDoVremena: []
+  workerMistakeChanceBonus: 0
+  suspiciousNeighborIgnored: 0
+  badBatchChanceBonus: 0
+  betrayalChanceLateGame: 0
+  theftPerCycle: 0
+  rivalActive: 0
+  incomePenaltyPercent: 0
+  salaryPerCycle: 0
+  departureChance: 0
+  blackMarketActive: 0
+  jobsBonusPercent: 0
+  preparedDefense: 0
+  futureAttackDamageBonus: 0
+  baseDefended: 0
   policeRaidCount: 0
   maxPoliceRaids: 3
   gameOver: 0
@@ -273814,8 +273852,7 @@ MonoBehaviour:
   minProductionLevel: 0
   maxProductionLevel: 3
   productionDescription: "Hire a worker for 220 \u20AC or fire one who is not busy.
-    There is no daily wage. A worker is paid 15 \u20AC for each delivery and 15
-    \u20AC whenever production is started."
+    Every worker is paid at the end of each day, whether working or idle."
   statusName: Hired workers from contact
   neutralStatusText: none
   positiveStatusText: active
@@ -273853,6 +273890,15 @@ MonoBehaviour:
   upgradeRadnici: 0
   upgradeMoral: 8
   upgradeEfikasnost: 10
+  producesGoods: 0
+  goodsPerBatch: 50
+  productionDurationSeconds: 30
+  productionWorkersRequired: 1
+  productionCost: 0
+  produceGoodsButtonText: Produce 50 g
+  moveGoodsButtonText: Move goods to store
+  transferSpeed: 10
+  warehouseCapacityPerUpgrade: 100
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   selectedColor: {r: 0, g: 0, b: 1, a: 1}
 --- !u!1 &1431497536
@@ -291702,7 +291748,8 @@ MonoBehaviour:
   goodsPerBatch: 50
   productionDurationSeconds: 30
   productionWorkersRequired: 1
-  produceGoodsButtonText: "Produce 50 g (-15 \u20AC worker pay)"
+  productionCost: 0
+  produceGoodsButtonText: Produce 50 g
   moveGoodsButtonText: Move goods to store
   transferSpeed: 10
   warehouseCapacityPerUpgrade: 100
