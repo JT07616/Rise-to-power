@@ -95,12 +95,12 @@ public class DeliveryOrderManager : MonoBehaviour
         if (showOffers)
         {
             Rect rect = new Rect((Screen.width - 650f) / 2f, (Screen.height - 390f) / 2f, 650f, 390f);
-            GUI.ModalWindow(771001, rect, DrawOffersWindow, "Today's delivery requests");
+            GUI.Window(771001, rect, DrawOffersWindow, "Today's delivery requests");
         }
         else if (selectedOrder >= 0 && selectedOrder < orders.Count)
         {
             Rect rect = new Rect((Screen.width - 440f) / 2f, (Screen.height - 300f) / 2f, 440f, 300f);
-            GUI.ModalWindow(771002, rect, DrawOrderWindow, "Delivery request");
+            GUI.Window(771002, rect, DrawOrderWindow, "Delivery request");
         }
 
         GUI.depth = previousDepth;
@@ -311,14 +311,64 @@ public class DeliveryOrderManager : MonoBehaviour
         }
 
         order.inProgress = true;
-        order.finishTime = Time.time + order.duration;
-        activeDeliveries.Add(order);
-        Debug.Log($"Delivery started for {order.customerName}: {order.grams} g, ETA {order.duration:0}s.");
+
+        Vector3 startPosition = GetVehicleStartPosition();
+        Vector3 destinationPosition = order.target != null
+            ? order.target.transform.position
+            : startPosition;
+
+        bool vehicleStarted = DeliveryVehicleManager.Instance != null &&
+            DeliveryVehicleManager.Instance.StartVehicleJourney(
+                startPosition,
+                destinationPosition,
+                order.duration,
+                () => CompleteVehicleDelivery(order));
+
+        if (vehicleStarted)
+        {
+            Debug.Log($"Delivery vehicle started for {order.customerName}: {order.grams} g, ETA {order.duration:0}s.");
+        }
+        else
+        {
+            order.finishTime = Time.time + order.duration;
+            activeDeliveries.Add(order);
+            Debug.LogWarning($"Delivery vehicle could not start for {order.customerName}; using timed delivery.");
+        }
 
         selectedOrder = -1;
         showOffers = GameEventManager.PlayerActionsRemaining > 1 && HasIncompleteOrders();
         IsPopupOpen = showOffers;
         GameEventManager.CompletePlayerAction();
+    }
+
+    private void CompleteVehicleDelivery(DeliveryOrder order)
+    {
+        if (order == null || order.completed)
+        {
+            return;
+        }
+
+        order.inProgress = false;
+        order.completed = true;
+        int influence = Mathf.Max(1, Mathf.CeilToInt(order.grams / 10f));
+
+        if (GameResources.Instance != null)
+        {
+            GameResources.Instance.Apply(dNovac: order.reward, dRizik: order.risk, dRadnici: 0);
+            GameResources.Instance.AddInfluence(influence);
+        }
+
+        bool territoryCaptured = order.target != null && order.target.RegisterCompletedDelivery();
+        if (order.target != null)
+        {
+            order.target.Deactivate();
+        }
+
+        Debug.Log($"Delivery completed for {order.customerName}: {order.grams} g, +{order.reward} €, risk +{order.risk}.");
+        if (territoryCaptured)
+        {
+            Debug.Log($"House captured after the second delivery for {order.customerName}.");
+        }
     }
 
     private bool CanCompleteDelivery(DeliveryOrder order)
@@ -444,6 +494,14 @@ public class DeliveryOrderManager : MonoBehaviour
         }
 
         return Vector3.zero;
+    }
+
+    private static Vector3 GetVehicleStartPosition()
+    {
+        GameObject deliveryPoint = GameObject.Find("DrugStoreDelivery");
+        return deliveryPoint != null
+            ? deliveryPoint.transform.position
+            : GetFactoryPosition();
     }
 
     private static void Shuffle<T>(List<T> items)

@@ -67,6 +67,7 @@ public class DeliveryOrderTarget : MonoBehaviour
         }
 
         bool captured = house.RegisterDelivery();
+
         if (house.IsPlayerOwned && targetRenderer != null)
         {
             RestoreColor();

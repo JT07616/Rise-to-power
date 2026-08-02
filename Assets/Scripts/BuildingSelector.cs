@@ -51,6 +51,13 @@ public class BuildingSelector : MonoBehaviour
             return;
         }
 
+        if (popupUI != null && selectedBuilding != null)
+        {
+            selectedBuilding.ClearColor();
+            selectedBuilding = null;
+            hoveredBuilding = null;
+        }
+
         HandleHover();
 
         if (Mouse.current.leftButton.wasPressedThisFrame)

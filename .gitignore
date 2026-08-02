@@ -15,4 +15,6 @@
 *.booproj
 *.svd
 *.pdb
-*.mdb
+*.mdbRecoveryBackups/
+Assets/_Recovery/
+Assets/_Recovery.meta

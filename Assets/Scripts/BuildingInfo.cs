@@ -309,6 +309,41 @@ public class BuildingInfo : MonoBehaviour
             return;
         }
 
+        GameObject factoryDeliveryPoint =
+            GameObject.Find("FactoryDeliveryPoint");
+
+        GameObject drugStoreDeliveryPoint =
+            GameObject.Find("DrugStoreDelivery");
+
+        GameObject storeToFactoryReturnPoint =
+            GameObject.Find("StoreToFactoryReturnpoint");
+
+        GameObject factoryToStoreTurnPoint =
+            GameObject.Find("FactoryToStoreTurnPoint");
+
+        if (DeliveryVehicleManager.Instance != null &&
+            factoryDeliveryPoint != null &&
+            drugStoreDeliveryPoint != null &&
+            storeToFactoryReturnPoint != null &&
+            factoryToStoreTurnPoint != null)
+        {
+            DeliveryVehicleManager.Instance.StartGoodsTransferJourney(
+                factoryDeliveryPoint.transform.position,
+                drugStoreDeliveryPoint.transform.position,
+                duration,
+                returnDestination:
+                    storeToFactoryReturnPoint.transform.position,
+                outboundWaypoint:
+                    factoryToStoreTurnPoint.transform.position
+            );
+        }
+        else
+        {
+            Debug.LogWarning(
+                "Goods transfer vehicle could not start; using timed transfer."
+            );
+        }
+
         GameEventManager.CompletePlayerAction();
         Debug.Log($"Goods transfer started. Travel time: {duration:0} seconds.");
     }
