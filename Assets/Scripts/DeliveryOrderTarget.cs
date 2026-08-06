@@ -23,7 +23,7 @@ public class DeliveryOrderTarget : MonoBehaviour
         get
         {
             TerritoryHouse house = GetTerritoryHouse(false);
-            return house != null ? house.completedDeliveries : 0;
+            return house != null ? house.GetCaptureProgress(TerritoryOwner.Player) : 0;
         }
     }
 
@@ -58,7 +58,7 @@ public class DeliveryOrderTarget : MonoBehaviour
         RestoreColor();
     }
 
-    public bool RegisterCompletedDelivery()
+    public bool RegisterCompletedDelivery(TerritoryOwner deliveryOwner = TerritoryOwner.Player)
     {
         TerritoryHouse house = GetTerritoryHouse(true);
         if (house == null)
@@ -66,12 +66,14 @@ public class DeliveryOrderTarget : MonoBehaviour
             return false;
         }
 
-        bool captured = house.RegisterDelivery();
+        bool captured = house.RegisterDelivery(deliveryOwner);
 
-        if (house.IsPlayerOwned && targetRenderer != null)
+        if (targetRenderer != null && house.Owner != TerritoryOwner.Neutral)
         {
             RestoreColor();
-            targetRenderer.material.color = new Color(0.1f, 0.35f, 1f);
+            targetRenderer.material.color = house.IsPlayerOwned
+                ? new Color(0.1f, 0.35f, 1f)
+                : new Color(0.9f, 0.1f, 0.1f);
         }
 
         return captured;
@@ -115,19 +117,161 @@ public class DeliveryOrderTarget : MonoBehaviour
     }
 }
 
+public enum TerritoryOwner
+{
+    Neutral,
+    Player,
+    AI
+}
+
+public enum AiFacilityRole
+{
+    Factory,
+    Warehouse,
+    WorkerContact,
+    Apartment
+}
+
+public class AiFacilityMarker : MonoBehaviour
+{
+    [SerializeField] private AiFacilityRole role;
+    private Renderer facilityRenderer;
+
+    public AiFacilityRole Role
+    {
+        get { return role; }
+    }
+
+    public Vector3 LabelPosition
+    {
+        get
+        {
+            return facilityRenderer != null
+                ? facilityRenderer.bounds.center + Vector3.up * facilityRenderer.bounds.extents.y
+                : transform.position + Vector3.up * 2f;
+        }
+    }
+
+    public void Configure(AiFacilityRole facilityRole)
+    {
+        role = facilityRole;
+        facilityRenderer = GetComponent<Renderer>();
+        if (facilityRenderer == null)
+        {
+            facilityRenderer = GetComponentInChildren<Renderer>();
+        }
+    }
+
+    public static AiFacilityMarker Find(AiFacilityRole facilityRole)
+    {
+        AiFacilityMarker[] facilities = FindObjectsByType<AiFacilityMarker>(FindObjectsSortMode.None);
+        foreach (AiFacilityMarker facility in facilities)
+        {
+            if (facility != null && facility.role == facilityRole)
+            {
+                return facility;
+            }
+        }
+
+        return null;
+    }
+
+    void OnGUI()
+    {
+        if (GameEventManager.IsPauseMenuOpen || GameEventManager.IsPopupOpen ||
+            DeliveryOrderManager.IsPopupOpen || BuildingPopupUI.IsAnyOpen || Camera.main == null)
+        {
+            return;
+        }
+
+        Vector3 screen = Camera.main.WorldToScreenPoint(LabelPosition);
+        if (screen.z <= 0f)
+        {
+            return;
+        }
+
+        string label = role == AiFacilityRole.WorkerContact
+            ? "RIVAL WORKERS"
+            : $"RIVAL {role.ToString().ToUpperInvariant()}";
+        Rect rect = new Rect(screen.x - 65f, Screen.height - screen.y - 15f, 130f, 30f);
+        Color previousColor = GUI.color;
+        GUI.color = new Color(1f, 0.45f, 0.45f);
+        GUI.Box(rect, label);
+        GUI.color = previousColor;
+    }
+}
+
 public class TerritoryHouse : MonoBehaviour
 {
-    public int completedDeliveries;
+    [SerializeField] private TerritoryOwner owner = TerritoryOwner.Neutral;
+    [SerializeField, Min(0)] private int playerCaptureProgress;
+    [SerializeField, Min(0)] private int aiCaptureProgress;
+
+    public TerritoryOwner Owner
+    {
+        get { return owner; }
+    }
 
     public bool IsPlayerOwned
     {
-        get { return completedDeliveries >= 2; }
+        get { return owner == TerritoryOwner.Player; }
     }
 
-    public bool RegisterDelivery()
+    public bool IsAiOwned
     {
-        bool wasPlayerOwned = IsPlayerOwned;
-        completedDeliveries++;
-        return !wasPlayerOwned && IsPlayerOwned;
+        get { return owner == TerritoryOwner.AI; }
+    }
+
+    public int GetCaptureProgress(TerritoryOwner side)
+    {
+        return side == TerritoryOwner.Player ? playerCaptureProgress :
+               side == TerritoryOwner.AI ? aiCaptureProgress : 0;
+    }
+
+    public void InitializeOwner(TerritoryOwner initialOwner)
+    {
+        if (owner == TerritoryOwner.Neutral && playerCaptureProgress == 0 && aiCaptureProgress == 0)
+        {
+            owner = initialOwner;
+        }
+    }
+
+    public bool RegisterDelivery(TerritoryOwner side)
+    {
+        if (side == TerritoryOwner.Neutral)
+        {
+            return false;
+        }
+
+        if (owner == side)
+        {
+            playerCaptureProgress = 0;
+            aiCaptureProgress = 0;
+            return false;
+        }
+
+        if (side == TerritoryOwner.Player)
+        {
+            playerCaptureProgress++;
+            aiCaptureProgress = 0;
+            if (playerCaptureProgress < 2)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            aiCaptureProgress++;
+            playerCaptureProgress = 0;
+            if (aiCaptureProgress < 2)
+            {
+                return false;
+            }
+        }
+
+        owner = side;
+        playerCaptureProgress = 0;
+        aiCaptureProgress = 0;
+        return true;
     }
 }

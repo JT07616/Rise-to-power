@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
+using System;
 
 public class SimpleStrategyCamera : MonoBehaviour
 {
@@ -22,17 +23,26 @@ public class SimpleStrategyCamera : MonoBehaviour
     public float minPitch = 10f;
     public float maxPitch = 85f;
 
+    [Header("Order Focus")]
+    public float focusDistance = 35f;
+    public float focusHeight = 25f;
+    public float focusMoveSpeed = 80f;
+    public float focusRotationSpeed = 120f;
+
     public LayerMask clickableLayers = ~0;
 
     private Vector3 targetPosition;
+    private Quaternion targetRotation;
     private Vector2 lastMousePosition;
 
     private float currentYaw;
     private float currentPitch;
+    private Action onFocusCompleted;
 
     void Start()
     {
         targetPosition = transform.position;
+        targetRotation = transform.rotation;
 
         Vector3 currentRotation = transform.eulerAngles;
 
@@ -57,7 +67,7 @@ public class SimpleStrategyCamera : MonoBehaviour
             return;
         }
 
-        if (GameEventManager.IsPopupOpen)
+        if (GameEventManager.IsPopupOpen && !GameEventManager.IsPlayerTurnAnnouncementActive)
         {
             return;
         }
@@ -72,19 +82,85 @@ public class SimpleStrategyCamera : MonoBehaviour
             return;
         }
 
-        HandleZoom();
-        HandleClickMove();
-        HandleRotation();
+        if (onFocusCompleted == null)
+        {
+            HandleZoom();
+            HandleClickMove();
+            HandleRotation();
+        }
 
         targetPosition.x = Mathf.Clamp(targetPosition.x, minX, maxX);
         targetPosition.y = Mathf.Clamp(targetPosition.y, minHeight, maxHeight);
         targetPosition.z = Mathf.Clamp(targetPosition.z, minZ, maxZ);
 
-        transform.position = Vector3.Lerp(
-            transform.position,
-            targetPosition,
-            moveSpeed * Time.deltaTime
+        if (onFocusCompleted != null)
+        {
+            transform.position = Vector3.MoveTowards(
+                transform.position,
+                targetPosition,
+                focusMoveSpeed * Time.deltaTime
+            );
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation,
+                targetRotation,
+                focusRotationSpeed * Time.deltaTime
+            );
+        }
+        else
+        {
+            transform.position = Vector3.Lerp(
+                transform.position,
+                targetPosition,
+                moveSpeed * Time.deltaTime
+            );
+        }
+
+        if (onFocusCompleted != null &&
+            Vector3.Distance(transform.position, targetPosition) <= 0.5f &&
+            Quaternion.Angle(transform.rotation, targetRotation) <= 0.5f)
+        {
+            Action completed = onFocusCompleted;
+            onFocusCompleted = null;
+            completed.Invoke();
+        }
+    }
+
+    public void FocusOn(Vector3 worldPosition, Action onCompleted)
+    {
+        Vector3 approachDirection = Vector3.ProjectOnPlane(
+            worldPosition - transform.position,
+            Vector3.up
+        ).normalized;
+        if (approachDirection.sqrMagnitude < 0.01f)
+        {
+            approachDirection = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+        }
+        if (approachDirection.sqrMagnitude < 0.01f)
+        {
+            approachDirection = Vector3.forward;
+        }
+
+        Vector3 focusPosition = worldPosition - approachDirection * focusDistance;
+        focusPosition.y = worldPosition.y + focusHeight;
+
+        targetPosition = new Vector3(
+            Mathf.Clamp(focusPosition.x, minX, maxX),
+            Mathf.Clamp(focusPosition.y, minHeight, maxHeight),
+            Mathf.Clamp(focusPosition.z, minZ, maxZ)
         );
+
+        targetRotation = Quaternion.LookRotation(worldPosition - targetPosition, Vector3.up);
+        Vector3 focusAngles = targetRotation.eulerAngles;
+        currentYaw = focusAngles.y;
+        currentPitch = focusAngles.x > 180f ? focusAngles.x - 360f : focusAngles.x;
+        onFocusCompleted = onCompleted;
+    }
+
+    public void CancelFocus()
+    {
+        onFocusCompleted = null;
+        targetPosition = transform.position;
+        targetRotation = transform.rotation;
     }
 
     void HandleZoom()
@@ -113,6 +189,13 @@ public class SimpleStrategyCamera : MonoBehaviour
             return;
         }
 
+        Vector2 pointerPosition = Mouse.current.position.ReadValue();
+        if (BuildingSelector.IsPointerOverMapLabel(pointerPosition) ||
+            DeliveryOrderManager.IsPointerOverMapLabel(pointerPosition))
+        {
+            return;
+        }
+
         if (EventSystem.current != null &&
             EventSystem.current.IsPointerOverGameObject())
         {
@@ -120,15 +203,17 @@ public class SimpleStrategyCamera : MonoBehaviour
         }
 
         Ray ray = Camera.main.ScreenPointToRay(
-            Mouse.current.position.ReadValue()
+            pointerPosition
         );
 
         if (Physics.Raycast(ray, out RaycastHit hit, 500f, clickableLayers))
         {
             BuildingInfo building =
                 hit.collider.GetComponentInParent<BuildingInfo>();
+            DeliveryOrderTarget deliveryTarget =
+                hit.collider.GetComponentInParent<DeliveryOrderTarget>();
 
-            if (building != null)
+            if (building != null || deliveryTarget != null)
             {
                 return;
             }

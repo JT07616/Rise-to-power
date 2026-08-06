@@ -86,6 +86,7 @@ public class BuildingInfo : MonoBehaviour
     public Color selectedColor = Color.blue;
 
     private Renderer[] renderers;
+    private Renderer labelRenderer;
     private Color[] originalColors;
     private int lastActionDay = -1000;
     private float productionFinishTime = -1f;
@@ -95,9 +96,28 @@ public class BuildingInfo : MonoBehaviour
         get { return producesGoods && productionFinishTime > Time.time; }
     }
 
+    public Vector3 LabelPosition
+    {
+        get
+        {
+            if (labelRenderer == null)
+            {
+                return transform.position + Vector3.up * 2f;
+            }
+
+            Bounds bounds = labelRenderer.bounds;
+            return new Vector3(bounds.center.x, bounds.max.y + 1.5f, bounds.center.z);
+        }
+    }
+
     void Awake()
     {
         renderers = GetComponentsInChildren<Renderer>();
+        labelRenderer = GetComponent<Renderer>();
+        if (labelRenderer == null)
+        {
+            labelRenderer = GetComponentInChildren<Renderer>();
+        }
         originalColors = new Color[renderers.Length];
 
         for (int i = 0; i < renderers.Length; i++)
@@ -114,7 +134,7 @@ public class BuildingInfo : MonoBehaviour
             return;
         }
 
-        GameResources.Instance.AddFactoryGoods(goodsPerBatch);
+        SharedActionRules.CompleteProduction(GameResources.Instance, goodsPerBatch);
         Debug.Log($"{buildingName}: production finished, +{goodsPerBatch} g.");
         productionFinishTime = -1f;
     }
@@ -253,9 +273,10 @@ public class BuildingInfo : MonoBehaviour
     {
         return producesGoods && IsUnlocked() && !IsProducingGoods &&
                GameEventManager.CanPlayerAct && GameResources.Instance != null &&
-               GameResources.Instance.CanAfford(GameResources.Instance.placaRadnikaPoZadatku) &&
-               GameResources.Instance.robaUTvornici + goodsPerBatch <= GameResources.Instance.kapacitetTvornice &&
-               GameResources.Instance.SlobodniRadnici >= productionWorkersRequired;
+               SharedActionRules.CanStartProduction(
+                   GameResources.Instance,
+                   goodsPerBatch,
+                   productionWorkersRequired);
     }
 
     public void StartGoodsProduction()
@@ -266,12 +287,11 @@ public class BuildingInfo : MonoBehaviour
         }
 
         GameResources resources = GameResources.Instance;
-        if (!resources.TryAssignWorkers(productionWorkersRequired, productionDurationSeconds))
-        {
-            return;
-        }
-
-        if (!ApplyActionEffects(-resources.placaRadnikaPoZadatku, 0, 0))
+        if (!SharedActionRules.TryStartProduction(
+                resources,
+                goodsPerBatch,
+                productionWorkersRequired,
+                productionDurationSeconds))
         {
             return;
         }
@@ -291,9 +311,7 @@ public class BuildingInfo : MonoBehaviour
         BuildingInfo factory = FindBuilding(BuildingRole.Factory);
         BuildingInfo warehouse = FindBuilding(BuildingRole.Warehouse);
         return factory != null && warehouse != null && warehouse.IsUnlocked() &&
-               !GameResources.Instance.TransportUTijeku && GameResources.Instance.robaUTvornici > 0 &&
-               GameResources.Instance.robaUSkladistu < GameResources.Instance.kapacitetSkladista &&
-               GameResources.Instance.SlobodniRadnici > 0;
+               SharedActionRules.CanStartTransfer(GameResources.Instance);
     }
 
     public void MoveGoodsToWarehouse()
@@ -597,13 +615,7 @@ public class BuildingInfo : MonoBehaviour
     private bool ApplyActionEffects(int money, int risk, int workers)
     {
         GameResources resources = GameResources.Instance;
-        if (resources == null || (money < 0 && !resources.TrySpendMoney(-money)))
-        {
-            return false;
-        }
-
-        resources.Apply(dNovac: Mathf.Max(0, money), dRizik: risk, dRadnici: workers);
-        return true;
+        return SharedActionRules.TryApplyResourceChange(resources, money, risk, workers);
     }
 
     private bool HasEnoughWorkersFor(int workerChange)

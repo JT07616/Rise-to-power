@@ -15,12 +15,18 @@ public class GameEventManager : MonoBehaviour
     public static int AiActionsRemaining { get; private set; }
     public static bool IsPlayerTurn { get; private set; }
     public static float PlayerTurnTimeRemaining { get; private set; }
+    public static float AiTurnTimeRemaining { get; private set; }
+    public static bool IsPlayerTurnAnnouncementActive
+    {
+        get { return instance != null && instance.playerTurnAnnouncementActive; }
+    }
     public static bool CanPlayerAct
     {
         get
         {
             return instance != null && IsPlayerTurn && PlayerActionsRemaining > 0 &&
-                   !IsPauseMenuOpen && GameResources.Instance != null &&
+                   !instance.playerTurnAnnouncementActive && !IsPauseMenuOpen &&
+                   GameResources.Instance != null &&
                    !GameResources.Instance.gameOver && !GameResources.Instance.chapterEnded;
         }
     }
@@ -29,7 +35,8 @@ public class GameEventManager : MonoBehaviour
 
     [Header("Turn system")]
     [Min(1)] public int actionsPerSide = 3;
-    [Min(1f)] public float playerTurnDuration = 30f;
+    [Min(1f)] public float playerTurnDuration = 45f;
+    [Min(1f)] public float aiTurnDuration = 45f;
     [Min(0f)] public float aiActionDelay = 0.6f;
 
     [Header("Timing")]
@@ -82,6 +89,9 @@ public class GameEventManager : MonoBehaviour
     private bool playerTerritoryOnLeft = true;
     private readonly List<MiniMapParcel> miniMapParcels = new List<MiniMapParcel>();
     private float miniMapParcelArea;
+    private bool playerTurnAnnouncementActive;
+    private int playerTurnCountdown;
+    private readonly List<string> aiActivityLog = new List<string>();
 
     private class MiniMapParcel
     {
@@ -129,10 +139,11 @@ public class GameEventManager : MonoBehaviour
 
         EventsCompleted = 0;
         CurrentDay = 1;
-        PlayerActionsRemaining = actionsPerSide;
         AiActionsRemaining = actionsPerSide;
-        IsPlayerTurn = true;
-        PlayerTurnTimeRemaining = playerTurnDuration;
+        IsPlayerTurn = false;
+        PlayerActionsRemaining = 0;
+        PlayerTurnTimeRemaining = 0f;
+        AiTurnTimeRemaining = 0f;
         IsPopupOpen = false;
 
         if (GetComponent<DeliveryOrderManager>() == null)
@@ -151,6 +162,7 @@ public class GameEventManager : MonoBehaviour
             popupBackground = femaleBackground;
         }
 
+        StartCoroutine(BeginPlayerTurn());
     }
 
     void Update()
@@ -177,7 +189,8 @@ public class GameEventManager : MonoBehaviour
 
     void UpdateTurnTimer()
     {
-        if (!IsPlayerTurn || IsPauseMenuOpen || GameResources.Instance == null ||
+        if (!IsPlayerTurn || playerTurnAnnouncementActive || IsPauseMenuOpen ||
+            GameResources.Instance == null ||
             GameResources.Instance.gameOver || GameResources.Instance.chapterEnded)
         {
             return;
@@ -309,24 +322,36 @@ public class GameEventManager : MonoBehaviour
         PlayerActionsRemaining = 0;
         PlayerTurnTimeRemaining = 0f;
         AiActionsRemaining = actionsPerSide;
-        StartCoroutine(PlayPlaceholderAiTurn());
+        AiTurnTimeRemaining = aiTurnDuration;
+        aiActivityLog.Clear();
+        ReportAiActivity("Rival is planning its move...");
+        StartCoroutine(PlayAiTurn());
     }
 
-    IEnumerator PlayPlaceholderAiTurn()
+    IEnumerator PlayAiTurn()
     {
-        while (AiActionsRemaining > 0)
+        float actionInterval = Mathf.Max(aiActionDelay, aiTurnDuration / (actionsPerSide + 1f));
+        float timeUntilAction = actionInterval;
+
+        while (AiActionsRemaining > 0 && AiTurnTimeRemaining > 0f)
         {
-            if (aiActionDelay > 0f)
+            AiTurnTimeRemaining = Mathf.Max(0f, AiTurnTimeRemaining - Time.deltaTime);
+            timeUntilAction -= Time.deltaTime;
+
+            if (timeUntilAction > 0f)
             {
-                yield return new WaitForSeconds(aiActionDelay);
+                yield return null;
+                continue;
             }
 
-            Debug.Log($"AI action {actionsPerSide - AiActionsRemaining + 1}/{actionsPerSide} (placeholder).");
+            ExecuteRandomAiAction();
             AiActionsRemaining--;
+            timeUntilAction = actionInterval;
+            yield return null;
         }
 
+        AiTurnTimeRemaining = 0f;
         CurrentDay++;
-        PlayerActionsRemaining = actionsPerSide;
         ApplyConsequences();
 
         if (GameResources.Instance != null && GameResources.Instance.gameOver)
@@ -335,13 +360,171 @@ public class GameEventManager : MonoBehaviour
             yield break;
         }
 
-        IsPlayerTurn = true;
-        PlayerTurnTimeRemaining = playerTurnDuration;
+        yield return StartCoroutine(BeginPlayerTurn());
 
         if (!eventActive && notificationQueue.Count > 0)
         {
             ShowNotification(notificationQueue.Dequeue());
         }
+    }
+
+    void ExecuteRandomAiAction()
+    {
+        OpponentResources ai = GameResources.Instance != null ? GameResources.Instance.Opponent : null;
+        if (ai == null)
+        {
+            return;
+        }
+
+        List<Func<bool>> availableActions = new List<Func<bool>>();
+        const int hireCost = 220;
+        const int productionGoods = 50;
+        const int productionWorkers = 1;
+        const float productionSeconds = 30f;
+        const float transferSeconds = 10f;
+
+        if (ai.workers < 5 && SharedActionRules.CanApplyResourceChange(ai, -hireCost, 1))
+        {
+            availableActions.Add(() =>
+            {
+                bool completed = SharedActionRules.TryApplyResourceChange(ai, -hireCost, 0, 1);
+                if (completed)
+                {
+                    ReportAiActivity("Hired one worker.");
+                    FocusCameraOnAiFacility(AiFacilityRole.WorkerContact);
+                }
+                return completed;
+            });
+        }
+
+        if (!ai.IsProducing &&
+            SharedActionRules.CanStartProduction(ai, productionGoods, productionWorkers))
+        {
+            availableActions.Add(() =>
+            {
+                bool started = SharedActionRules.TryStartProduction(
+                    ai,
+                    productionGoods,
+                    productionWorkers,
+                    productionSeconds);
+                if (started)
+                {
+                    ai.ScheduleProduction(productionGoods, productionSeconds);
+                    ReportAiActivity($"Started production of {productionGoods} g.");
+                    FocusCameraOnAiFacility(AiFacilityRole.Factory);
+                }
+                return started;
+            });
+        }
+
+        if (!ai.IsTransferring && SharedActionRules.CanStartTransfer(ai))
+        {
+            availableActions.Add(() =>
+            {
+                bool started = SharedActionRules.TryStartTransfer(ai, transferSeconds, out int amount);
+                if (started)
+                {
+                    ai.ScheduleTransfer(transferSeconds);
+                    ReportAiActivity($"Moving {amount} g to the warehouse.");
+                    AnimateAiTransfer(transferSeconds);
+                }
+                return started;
+            });
+        }
+
+        if (DeliveryOrderManager.CanAiStartDelivery())
+        {
+            availableActions.Add(() => DeliveryOrderManager.TryStartRandomAiDelivery());
+        }
+
+        if (availableActions.Count == 0)
+        {
+            ReportAiActivity("No valid action was available; rival waited.");
+            return;
+        }
+
+        availableActions[UnityEngine.Random.Range(0, availableActions.Count)].Invoke();
+    }
+
+    static void FocusCameraOnAiFacility(AiFacilityRole role)
+    {
+        AiFacilityMarker facility = AiFacilityMarker.Find(role);
+        if (facility != null)
+        {
+            FocusCameraOnWorldPosition(facility.LabelPosition);
+        }
+    }
+
+    public static void FocusCameraOnWorldPosition(Vector3 worldPosition)
+    {
+        SimpleStrategyCamera camera = instance != null ? instance.strategyCamera : null;
+        if (camera == null)
+        {
+            camera = FindFirstObjectByType<SimpleStrategyCamera>();
+        }
+        if (camera != null)
+        {
+            camera.FocusOn(worldPosition, () => { });
+        }
+    }
+
+    static void AnimateAiTransfer(float durationSeconds)
+    {
+        AiFacilityMarker factory = AiFacilityMarker.Find(AiFacilityRole.Factory);
+        AiFacilityMarker warehouse = AiFacilityMarker.Find(AiFacilityRole.Warehouse);
+        if (factory == null || warehouse == null)
+        {
+            return;
+        }
+
+        FocusCameraOnWorldPosition(Vector3.Lerp(factory.LabelPosition, warehouse.LabelPosition, 0.5f));
+        if (DeliveryVehicleManager.Instance != null)
+        {
+            DeliveryVehicleManager.Instance.StartGoodsTransferJourney(
+                factory.transform.position,
+                warehouse.transform.position,
+                durationSeconds);
+        }
+    }
+
+    public static void ReportAiActivity(string message)
+    {
+        if (instance == null || string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        instance.aiActivityLog.Add(message);
+        while (instance.aiActivityLog.Count > 4)
+        {
+            instance.aiActivityLog.RemoveAt(0);
+        }
+        Debug.Log($"AI: {message}");
+    }
+
+    IEnumerator BeginPlayerTurn()
+    {
+        if (strategyCamera != null)
+        {
+            strategyCamera.CancelFocus();
+        }
+
+        IsPlayerTurn = true;
+        PlayerActionsRemaining = actionsPerSide;
+        PlayerTurnTimeRemaining = playerTurnDuration;
+        playerTurnAnnouncementActive = true;
+        IsPopupOpen = true;
+
+        for (int countdown = 4; countdown >= 1; countdown--)
+        {
+            playerTurnCountdown = countdown;
+            yield return new WaitForSeconds(1f);
+        }
+
+        playerTurnCountdown = 0;
+        playerTurnAnnouncementActive = false;
+        PlayerTurnTimeRemaining = playerTurnDuration;
+        IsPopupOpen = eventActive;
     }
 
     void ContinueChain()
@@ -1776,10 +1959,17 @@ public class GameEventManager : MonoBehaviour
         DrawResourceBar();
         DrawTurnPanel();
         DrawMiniMap();
+        DrawAiActivityPanel();
 
         if (IsPauseMenuOpen)
         {
             DrawPauseMenu();
+            return;
+        }
+
+        if (playerTurnAnnouncementActive)
+        {
+            DrawPlayerTurnAnnouncement();
             return;
         }
 
@@ -1806,10 +1996,78 @@ public class GameEventManager : MonoBehaviour
             normal = { textColor = Color.white }
         };
 
-        string status = IsPlayerTurn
-            ? $"Day {CurrentDay}  |  Actions: {PlayerActionsRemaining}/{actionsPerSide}  |  Time: {Mathf.CeilToInt(PlayerTurnTimeRemaining)}s"
-            : $"Day {CurrentDay}  |  AI actions: {AiActionsRemaining}/{actionsPerSide}";
+        string status;
+        if (playerTurnAnnouncementActive)
+        {
+            status = $"Day {CurrentDay}  |  Your turn starts in {playerTurnCountdown}";
+        }
+        else
+        {
+            status = IsPlayerTurn
+                ? $"Day {CurrentDay}  |  Actions: {PlayerActionsRemaining}/{actionsPerSide}  |  Time: {Mathf.CeilToInt(PlayerTurnTimeRemaining)}s"
+                : $"Day {CurrentDay}  |  AI actions: {AiActionsRemaining}/{actionsPerSide}  |  Time: {Mathf.CeilToInt(AiTurnTimeRemaining)}s";
+        }
         GUI.Label(new Rect(panelRect.x + 8f, panelRect.y + 8f, panelRect.width - 16f, 26f), status, statusStyle);
+    }
+
+    void DrawAiActivityPanel()
+    {
+        if (IsPlayerTurn || aiActivityLog.Count == 0)
+        {
+            return;
+        }
+
+        const float width = 360f;
+        const float height = 160f;
+        const float margin = 12f;
+        Rect panel = new Rect(margin, barHeight + margin, width, height);
+        GUI.Box(panel, "RIVAL ACTIVITY");
+
+        GUIStyle activityStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 14,
+            normal = { textColor = Color.white },
+            wordWrap = true
+        };
+
+        float y = panel.y + 30f;
+        for (int i = aiActivityLog.Count - 1; i >= 0; i--)
+        {
+            GUI.Label(
+                new Rect(panel.x + 12f, y, panel.width - 24f, 26f),
+                $"• {aiActivityLog[i]}",
+                activityStyle);
+            y += 28f;
+        }
+    }
+
+    void DrawPlayerTurnAnnouncement()
+    {
+        int previousDepth = GUI.depth;
+        GUI.depth = -900;
+
+        Color previousColor = GUI.color;
+        GUI.color = new Color(0f, 0f, 0f, 0.55f);
+        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = previousColor;
+
+        GUIStyle titleStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 42,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            normal = { textColor = Color.white }
+        };
+        GUIStyle countdownStyle = new GUIStyle(titleStyle)
+        {
+            fontSize = 76
+        };
+
+        float centerY = Screen.height * 0.5f;
+        GUI.Label(new Rect(0f, centerY - 100f, Screen.width, 60f), "YOUR TURN", titleStyle);
+        GUI.Label(new Rect(0f, centerY - 35f, Screen.width, 100f), playerTurnCountdown.ToString(), countdownStyle);
+
+        GUI.depth = previousDepth;
     }
 
     void SetupMiniMap()
@@ -1881,8 +2139,8 @@ public class GameEventManager : MonoBehaviour
         GUI.Box(panel, "CITY TERRITORY");
         GUI.DrawTexture(map, miniMapTexture, ScaleMode.StretchToFill, false);
 
-        float playerPercent = Mathf.Clamp(GameResources.Instance != null ? GameResources.Instance.utjecaj : 30f, 0f, 70f);
-        float opponentPercent = Mathf.Clamp(opponentTerritoryPercent, 0f, 100f - playerPercent);
+        float playerPercent = GetTerritoryPercent(TerritoryOwner.Player);
+        float opponentPercent = GetTerritoryPercent(TerritoryOwner.AI);
         float neutralPercent = Mathf.Max(0f, 100f - playerPercent - opponentPercent);
 
         DrawMiniMapTerritories(map, playerPercent, neutralPercent);
@@ -1890,6 +2148,31 @@ public class GameEventManager : MonoBehaviour
         DrawMiniMapMarkers(map);
         GUI.Label(new Rect(map.x + 4f, map.y + 2f, map.width - 8f, 22f),
             $"You {playerPercent:0}%   Neutral {neutralPercent:0}%   Rival {opponentPercent:0}%");
+    }
+
+    float GetTerritoryPercent(TerritoryOwner owner)
+    {
+        if (miniMapParcelArea <= 0f)
+        {
+            return 0f;
+        }
+
+        float ownedArea = 0f;
+        foreach (MiniMapParcel parcel in miniMapParcels)
+        {
+            TerritoryHouse house = parcel.source != null
+                ? parcel.source.GetComponent<TerritoryHouse>()
+                : null;
+            TerritoryOwner parcelOwner = house != null
+                ? house.Owner
+                : parcel.playerOwned ? TerritoryOwner.Player : TerritoryOwner.Neutral;
+            if (parcelOwner == owner)
+            {
+                ownedArea += parcel.area;
+            }
+        }
+
+        return ownedArea / miniMapParcelArea * 100f;
     }
 
     void DrawMiniMapMarkers(Rect map)
@@ -1963,6 +2246,128 @@ public class GameEventManager : MonoBehaviour
         miniMapParcels.Sort((a, b) => playerTerritoryOnLeft
             ? a.center.x.CompareTo(b.center.x)
             : b.center.x.CompareTo(a.center.x));
+
+        InitializeTerritoryOwners();
+        SetupAiFacilities();
+    }
+
+    void InitializeTerritoryOwners()
+    {
+        float playerPercent = Mathf.Clamp(GameResources.Instance != null ? GameResources.Instance.utjecaj : 30f, 0f, 70f);
+        float opponentPercent = Mathf.Clamp(opponentTerritoryPercent, 0f, 100f - playerPercent);
+        float playerAreaLimit = miniMapParcelArea * playerPercent / 100f;
+        float neutralAreaLimit = miniMapParcelArea * (100f - opponentPercent) / 100f;
+        float accumulatedArea = 0f;
+
+        foreach (MiniMapParcel parcel in miniMapParcels)
+        {
+            float parcelMiddle = accumulatedArea + parcel.area * 0.5f;
+            TerritoryOwner initialOwner = parcel.playerOwned || parcelMiddle <= playerAreaLimit
+                ? TerritoryOwner.Player
+                : parcelMiddle <= neutralAreaLimit ? TerritoryOwner.Neutral : TerritoryOwner.AI;
+
+            if (parcel.source != null)
+            {
+                TerritoryHouse house = parcel.source.GetComponent<TerritoryHouse>();
+                if (house == null)
+                {
+                    house = parcel.source.AddComponent<TerritoryHouse>();
+                }
+                house.InitializeOwner(initialOwner);
+            }
+
+            accumulatedArea += parcel.area;
+        }
+    }
+
+    void SetupAiFacilities()
+    {
+        List<MiniMapParcel> candidates = new List<MiniMapParcel>();
+        Vector3 aiCenter = Vector3.zero;
+        foreach (MiniMapParcel parcel in miniMapParcels)
+        {
+            TerritoryHouse house = parcel.source != null
+                ? parcel.source.GetComponent<TerritoryHouse>()
+                : null;
+            if (house == null || !house.IsAiOwned ||
+                parcel.source.GetComponentInParent<BuildingInfo>() != null)
+            {
+                continue;
+            }
+
+            candidates.Add(parcel);
+            aiCenter += parcel.center;
+        }
+
+        if (candidates.Count < 4)
+        {
+            Debug.LogWarning("Not enough AI-owned city buildings were found to assign all AI facilities.");
+            return;
+        }
+
+        aiCenter /= candidates.Count;
+        MiniMapParcel factory = TakeClosestParcel(candidates, aiCenter);
+        MiniMapParcel warehouse = TakeClosestParcel(candidates, factory.center);
+        MiniMapParcel workerContact = TakeFarthestParcel(candidates, factory.center);
+        MiniMapParcel apartment = TakeFarthestParcel(candidates, workerContact.center);
+
+        AddAiFacility(factory, AiFacilityRole.Factory);
+        AddAiFacility(warehouse, AiFacilityRole.Warehouse);
+        AddAiFacility(workerContact, AiFacilityRole.WorkerContact);
+        AddAiFacility(apartment, AiFacilityRole.Apartment);
+    }
+
+    static MiniMapParcel TakeClosestParcel(List<MiniMapParcel> candidates, Vector3 position)
+    {
+        int selectedIndex = 0;
+        float selectedDistance = float.MaxValue;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            float distance = (candidates[i].center - position).sqrMagnitude;
+            if (distance < selectedDistance)
+            {
+                selectedDistance = distance;
+                selectedIndex = i;
+            }
+        }
+
+        MiniMapParcel selected = candidates[selectedIndex];
+        candidates.RemoveAt(selectedIndex);
+        return selected;
+    }
+
+    static MiniMapParcel TakeFarthestParcel(List<MiniMapParcel> candidates, Vector3 position)
+    {
+        int selectedIndex = 0;
+        float selectedDistance = float.MinValue;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            float distance = (candidates[i].center - position).sqrMagnitude;
+            if (distance > selectedDistance)
+            {
+                selectedDistance = distance;
+                selectedIndex = i;
+            }
+        }
+
+        MiniMapParcel selected = candidates[selectedIndex];
+        candidates.RemoveAt(selectedIndex);
+        return selected;
+    }
+
+    static void AddAiFacility(MiniMapParcel parcel, AiFacilityRole role)
+    {
+        if (parcel == null || parcel.source == null)
+        {
+            return;
+        }
+
+        AiFacilityMarker marker = parcel.source.GetComponent<AiFacilityMarker>();
+        if (marker == null)
+        {
+            marker = parcel.source.AddComponent<AiFacilityMarker>();
+        }
+        marker.Configure(role);
     }
 
     void DrawMiniMapTerritories(Rect map, float playerPercent, float neutralPercent)
@@ -1985,7 +2390,19 @@ public class GameEventManager : MonoBehaviour
             TerritoryHouse territoryHouse = parcel.source != null
                 ? parcel.source.GetComponent<TerritoryHouse>()
                 : null;
-            if (parcel.playerOwned || (territoryHouse != null && territoryHouse.IsPlayerOwned))
+            if (territoryHouse != null && territoryHouse.IsPlayerOwned)
+            {
+                color = playerTerritoryColor;
+            }
+            else if (territoryHouse != null && territoryHouse.IsAiOwned)
+            {
+                color = opponentTerritoryColor;
+            }
+            else if (territoryHouse != null && territoryHouse.Owner == TerritoryOwner.Neutral)
+            {
+                color = neutralTerritoryColor;
+            }
+            else if (parcel.playerOwned)
             {
                 color = playerTerritoryColor;
             }

@@ -4,6 +4,7 @@ using UnityEngine;
 public class DeliveryOrderManager : MonoBehaviour
 {
     public static bool IsPopupOpen { get; private set; }
+    private static DeliveryOrderManager instance;
 
     [Header("Orders")]
     [Min(1)] public int offersPerDay = 4;
@@ -19,9 +20,9 @@ public class DeliveryOrderManager : MonoBehaviour
 
     private readonly List<DeliveryOrder> orders = new List<DeliveryOrder>();
     private readonly List<DeliveryOrder> activeDeliveries = new List<DeliveryOrder>();
+    private readonly List<AiDelivery> activeAiDeliveries = new List<AiDelivery>();
     private int generatedDay = -1;
     private int selectedOrder = -1;
-    private bool showOffers;
 
     private static readonly string[] AliasPrefixes =
     {
@@ -49,9 +50,27 @@ public class DeliveryOrderManager : MonoBehaviour
         public DeliveryOrderTarget target;
     }
 
+    private class AiDelivery
+    {
+        public int reward;
+        public int risk;
+        public int grams;
+        public float finishTime;
+        public TerritoryHouse target;
+        public Renderer targetRenderer;
+        public bool usesVehicle;
+        public bool completed;
+    }
+
+    void Awake()
+    {
+        instance = this;
+    }
+
     void Update()
     {
         CompleteFinishedDeliveries();
+        CompleteFinishedAiDeliveries();
 
         if (!GameEventManager.IsPlayerTurn)
         {
@@ -69,6 +88,125 @@ public class DeliveryOrderManager : MonoBehaviour
     {
         ClearOrders();
         IsPopupOpen = false;
+        if (instance == this)
+        {
+            instance = null;
+        }
+    }
+
+    public static bool IsPointerOverMapLabel(Vector2 screenPosition)
+    {
+        if (instance == null)
+        {
+            return false;
+        }
+
+        Camera camera = Camera.main;
+        if (camera == null)
+        {
+            return false;
+        }
+
+        Vector2 guiPosition = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
+        for (int i = 0; i < instance.orders.Count; i++)
+        {
+            DeliveryOrder order = instance.orders[i];
+            if (order.completed || order.target == null)
+            {
+                continue;
+            }
+
+            Vector3 screen = camera.WorldToScreenPoint(order.target.LabelPosition);
+            if (screen.z <= 0f)
+            {
+                continue;
+            }
+
+            Rect rect = new Rect(screen.x - 55f, Screen.height - screen.y - 15f, 110f, 30f);
+            if (rect.Contains(guiPosition))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool CanAiStartDelivery()
+    {
+        if (instance == null || GameResources.Instance == null ||
+            GameResources.Instance.Opponent.warehouseGoods < instance.minGoodsPerDelivery)
+        {
+            return false;
+        }
+
+        return instance.FindAiDeliveryCandidates().Count > 0;
+    }
+
+    public static bool TryStartRandomAiDelivery()
+    {
+        if (!CanAiStartDelivery())
+        {
+            return false;
+        }
+
+        OpponentResources ai = GameResources.Instance.Opponent;
+        List<TerritoryHouse> candidates = instance.FindAiDeliveryCandidates();
+        TerritoryHouse target = candidates[Random.Range(0, candidates.Count)];
+        Renderer targetRenderer = target.GetComponent<Renderer>();
+        if (targetRenderer == null)
+        {
+            targetRenderer = target.GetComponentInChildren<Renderer>();
+        }
+
+        int maximumGoods = Mathf.Min(instance.maxGoodsPerDelivery, ai.warehouseGoods);
+        int grams = Random.Range(instance.minGoodsPerDelivery, maximumGoods + 1);
+        Vector3 targetPosition = targetRenderer != null
+            ? targetRenderer.bounds.center
+            : target.transform.position;
+        float distance = Vector3.Distance(instance.GetAiOperationPosition(), targetPosition);
+        float baseDuration = distance / instance.deliverySpeed + grams * instance.handlingSecondsPerGram;
+        float duration = Mathf.Max(
+            instance.minimumDeliverySeconds,
+            baseDuration * Random.Range(0.85f, 1.2f));
+        int reward = Mathf.RoundToInt(
+            (grams * instance.pricePerGram + distance * instance.distancePricePerUnit) *
+            Random.Range(0.9f, 1.15f));
+        int risk = Mathf.Clamp(
+            Mathf.RoundToInt(instance.minRisk + grams / 5f + distance / 40f + Random.Range(0f, 4f)),
+            instance.minRisk,
+            Mathf.Max(instance.minRisk, instance.maxRisk));
+
+        if (!SharedActionRules.TryStartDelivery(ai, grams, duration))
+        {
+            return false;
+        }
+
+        AiDelivery delivery = new AiDelivery
+        {
+            reward = reward,
+            risk = risk,
+            grams = grams,
+            finishTime = Time.time + duration,
+            target = target,
+            targetRenderer = targetRenderer
+        };
+        instance.activeAiDeliveries.Add(delivery);
+
+        delivery.usesVehicle = DeliveryVehicleManager.Instance != null &&
+            DeliveryVehicleManager.Instance.StartVehicleJourney(
+                instance.GetAiOperationPosition(),
+                targetPosition,
+                duration,
+                () => instance.CompleteAiDelivery(delivery));
+
+        GameEventManager.FocusCameraOnWorldPosition(targetPosition);
+
+        GameEventManager.ReportAiActivity(
+            delivery.usesVehicle
+                ? $"Vehicle started a {grams} g delivery to {target.Owner} territory."
+                : $"Started a timed {grams} g delivery to {target.Owner} territory ({duration:0}s).");
+        return true;
     }
 
     void OnGUI()
@@ -79,9 +217,12 @@ public class DeliveryOrderManager : MonoBehaviour
             return;
         }
 
-        DrawOrderLabels();
+        if (!BuildingPopupUI.IsAnyOpen)
+        {
+            DrawOrderLabels();
+        }
 
-        if (!showOffers && selectedOrder < 0)
+        if (selectedOrder < 0 || selectedOrder >= orders.Count)
         {
             return;
         }
@@ -92,16 +233,8 @@ public class DeliveryOrderManager : MonoBehaviour
         GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
-        if (showOffers)
-        {
-            Rect rect = new Rect((Screen.width - 650f) / 2f, (Screen.height - 390f) / 2f, 650f, 390f);
-            GUI.Window(771001, rect, DrawOffersWindow, "Today's delivery requests");
-        }
-        else if (selectedOrder >= 0 && selectedOrder < orders.Count)
-        {
-            Rect rect = new Rect((Screen.width - 440f) / 2f, (Screen.height - 300f) / 2f, 440f, 300f);
-            GUI.Window(771002, rect, DrawOrderWindow, "Delivery request");
-        }
+        Rect rect = new Rect((Screen.width - 440f) / 2f, (Screen.height - 400f) / 2f, 440f, 400f);
+        GUI.Window(771002, rect, DrawOrderWindow, "Delivery request");
 
         GUI.depth = previousDepth;
     }
@@ -114,8 +247,29 @@ public class DeliveryOrderManager : MonoBehaviour
             return;
         }
 
+        DeliveryOrderTarget target = orders[orderIndex].target;
+        SimpleStrategyCamera strategyCamera = Camera.main != null
+            ? Camera.main.GetComponent<SimpleStrategyCamera>()
+            : null;
+
+        if (strategyCamera != null && target != null)
+        {
+            strategyCamera.FocusOn(target.LabelPosition, () => ShowOrder(orderIndex));
+            return;
+        }
+
+        ShowOrder(orderIndex);
+    }
+
+    private void ShowOrder(int orderIndex)
+    {
+        if (!GameEventManager.CanPlayerAct || orderIndex < 0 || orderIndex >= orders.Count ||
+            orders[orderIndex].completed || orders[orderIndex].inProgress)
+        {
+            return;
+        }
+
         selectedOrder = orderIndex;
-        showOffers = false;
         IsPopupOpen = true;
     }
 
@@ -159,9 +313,8 @@ public class DeliveryOrderManager : MonoBehaviour
             });
         }
 
-        showOffers = orders.Count > 0;
         selectedOrder = -1;
-        IsPopupOpen = showOffers;
+        IsPopupOpen = false;
 
         if (orders.Count < offersPerDay)
         {
@@ -179,6 +332,7 @@ public class DeliveryOrderManager : MonoBehaviour
         {
             if (candidate == null || !candidate.enabled || !candidate.gameObject.activeInHierarchy ||
                 candidate.GetComponentInParent<BuildingInfo>() != null ||
+                candidate.GetComponentInParent<AiFacilityMarker>() != null ||
                 candidate.GetComponent<DeliveryOrderTarget>() != null)
             {
                 continue;
@@ -212,40 +366,15 @@ public class DeliveryOrderManager : MonoBehaviour
         return candidates;
     }
 
-    private void DrawOffersWindow(int windowId)
-    {
-        GUILayout.Space(8f);
-        GUILayout.Label("Each delivery uses one action, warehouse goods and one free worker.");
-        GUILayout.Space(10f);
-
-        for (int i = 0; i < orders.Count; i++)
-        {
-            DeliveryOrder order = orders[i];
-            GUILayout.BeginHorizontal(GUI.skin.box, GUILayout.Height(48f));
-            GUILayout.Label($"{i + 1}. {order.customerName}", GUILayout.Width(160f));
-            GUILayout.Label($"{order.grams} g / {order.reward} €", GUILayout.Width(130f));
-            GUILayout.Label($"Risk: +{order.risk}", GUILayout.Width(85f));
-            GUILayout.Label($"{order.duration:0}s", GUILayout.Width(55f));
-
-            GUI.enabled = !order.completed && !order.inProgress && GameEventManager.CanPlayerAct;
-            if (GUILayout.Button(order.completed ? "Completed" : "Select", GUILayout.Width(100f), GUILayout.Height(30f)))
-            {
-                OpenOrder(i);
-            }
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-        }
-
-        GUILayout.FlexibleSpace();
-        if (GUILayout.Button("Close and choose on map", GUILayout.Height(34f)))
-        {
-            showOffers = false;
-            IsPopupOpen = false;
-        }
-    }
-
     private void DrawOrderWindow(int windowId)
     {
+        if (GUI.Button(new Rect(410f, 2f, 26f, 20f), "X"))
+        {
+            selectedOrder = -1;
+            IsPopupOpen = false;
+            return;
+        }
+
         DeliveryOrder order = orders[selectedOrder];
         GameResources resources = GameResources.Instance;
         GUILayout.Space(12f);
@@ -275,12 +404,6 @@ public class DeliveryOrderManager : MonoBehaviour
             CompleteDelivery(order);
         }
         GUI.enabled = true;
-
-        if (GUILayout.Button("Back to requests", GUILayout.Height(32f)))
-        {
-            selectedOrder = -1;
-            showOffers = true;
-        }
     }
 
     private void CompleteDelivery(DeliveryOrder order)
@@ -291,22 +414,8 @@ public class DeliveryOrderManager : MonoBehaviour
         }
 
         GameResources resources = GameResources.Instance;
-        int workerPay = resources.placaRadnikaPoZadatku;
-        if (!resources.TrySpendMoney(workerPay))
+        if (!SharedActionRules.TryStartDelivery(resources, order.grams, order.duration))
         {
-            return;
-        }
-
-        if (!resources.TryConsumeWarehouseGoods(order.grams))
-        {
-            resources.novac += workerPay;
-            return;
-        }
-
-        if (!resources.TryAssignWorkers(1, order.duration))
-        {
-            resources.robaUSkladistu += order.grams;
-            resources.novac += workerPay;
             return;
         }
 
@@ -336,8 +445,7 @@ public class DeliveryOrderManager : MonoBehaviour
         }
 
         selectedOrder = -1;
-        showOffers = GameEventManager.PlayerActionsRemaining > 1 && HasIncompleteOrders();
-        IsPopupOpen = showOffers;
+        IsPopupOpen = false;
         GameEventManager.CompletePlayerAction();
     }
 
@@ -354,8 +462,11 @@ public class DeliveryOrderManager : MonoBehaviour
 
         if (GameResources.Instance != null)
         {
-            GameResources.Instance.Apply(dNovac: order.reward, dRizik: order.risk, dRadnici: 0);
-            GameResources.Instance.AddInfluence(influence);
+            SharedActionRules.CompleteDelivery(
+                GameResources.Instance,
+                order.reward,
+                order.risk,
+                influence);
         }
 
         bool territoryCaptured = order.target != null && order.target.RegisterCompletedDelivery();
@@ -374,9 +485,7 @@ public class DeliveryOrderManager : MonoBehaviour
     private bool CanCompleteDelivery(DeliveryOrder order)
     {
         return order != null && GameEventManager.CanPlayerAct && GameResources.Instance != null &&
-               GameResources.Instance.robaUSkladistu >= order.grams &&
-               GameResources.Instance.CanAfford(GameResources.Instance.placaRadnikaPoZadatku) &&
-               GameResources.Instance.SlobodniRadnici > 0;
+               SharedActionRules.CanStartDelivery(GameResources.Instance, order.grams);
     }
 
     private void CompleteFinishedDeliveries()
@@ -394,8 +503,11 @@ public class DeliveryOrderManager : MonoBehaviour
             int influence = Mathf.Max(1, Mathf.CeilToInt(order.grams / 10f));
             if (GameResources.Instance != null)
             {
-                GameResources.Instance.Apply(dNovac: order.reward, dRizik: order.risk, dRadnici: 0);
-                GameResources.Instance.AddInfluence(influence);
+                SharedActionRules.CompleteDelivery(
+                    GameResources.Instance,
+                    order.reward,
+                    order.risk,
+                    influence);
             }
 
             bool territoryCaptured = order.target != null && order.target.RegisterCompletedDelivery();
@@ -413,17 +525,114 @@ public class DeliveryOrderManager : MonoBehaviour
         }
     }
 
-    private bool HasIncompleteOrders()
+    private void CompleteFinishedAiDeliveries()
     {
-        foreach (DeliveryOrder order in orders)
+        for (int i = activeAiDeliveries.Count - 1; i >= 0; i--)
         {
-            if (!order.completed)
+            AiDelivery delivery = activeAiDeliveries[i];
+            if (delivery.usesVehicle || Time.time < delivery.finishTime)
+            {
+                continue;
+            }
+
+            CompleteAiDelivery(delivery);
+        }
+    }
+
+    private void CompleteAiDelivery(AiDelivery delivery)
+    {
+        if (delivery == null || delivery.completed)
+        {
+            return;
+        }
+
+        delivery.completed = true;
+        OpponentResources ai = GameResources.Instance != null
+            ? GameResources.Instance.Opponent
+            : null;
+        int influence = Mathf.Max(1, Mathf.CeilToInt(delivery.grams / 10f));
+        SharedActionRules.CompleteDelivery(ai, delivery.reward, delivery.risk, influence);
+
+        TerritoryOwner previousOwner = delivery.target != null
+            ? delivery.target.Owner
+            : TerritoryOwner.Neutral;
+        bool captured = delivery.target != null &&
+            delivery.target.RegisterDelivery(TerritoryOwner.AI);
+
+        if (captured && delivery.targetRenderer != null &&
+            delivery.targetRenderer.GetComponent<DeliveryOrderTarget>() == null)
+        {
+            delivery.targetRenderer.material.color = new Color(0.9f, 0.1f, 0.1f);
+        }
+
+        GameEventManager.ReportAiActivity(
+            captured
+                ? $"Captured a {previousOwner} territory with a {delivery.grams} g delivery."
+                : $"Completed a {delivery.grams} g delivery for {delivery.reward} €.");
+        activeAiDeliveries.Remove(delivery);
+    }
+
+    private List<TerritoryHouse> FindAiDeliveryCandidates()
+    {
+        TerritoryHouse[] houses = FindObjectsByType<TerritoryHouse>(FindObjectsSortMode.None);
+        List<TerritoryHouse> candidates = new List<TerritoryHouse>();
+        foreach (TerritoryHouse house in houses)
+        {
+            if (house == null || !house.gameObject.activeInHierarchy ||
+                house.GetComponentInParent<BuildingInfo>() != null ||
+                house.GetComponentInParent<AiFacilityMarker>() != null || IsAiTargetActive(house))
+            {
+                continue;
+            }
+
+            Renderer renderer = house.GetComponent<Renderer>();
+            if (renderer == null)
+            {
+                renderer = house.GetComponentInChildren<Renderer>();
+            }
+            if (renderer != null)
+            {
+                candidates.Add(house);
+            }
+        }
+
+        return candidates;
+    }
+
+    private bool IsAiTargetActive(TerritoryHouse house)
+    {
+        foreach (AiDelivery delivery in activeAiDeliveries)
+        {
+            if (delivery.target == house)
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private Vector3 GetAiOperationPosition()
+    {
+        AiFacilityMarker warehouse = AiFacilityMarker.Find(AiFacilityRole.Warehouse);
+        if (warehouse != null)
+        {
+            return warehouse.transform.position;
+        }
+
+        TerritoryHouse[] houses = FindObjectsByType<TerritoryHouse>(FindObjectsSortMode.None);
+        Vector3 total = Vector3.zero;
+        int count = 0;
+        foreach (TerritoryHouse house in houses)
+        {
+            if (house != null && house.IsAiOwned)
+            {
+                total += house.transform.position;
+                count++;
+            }
+        }
+
+        return count > 0 ? total / count : GetFactoryPosition();
     }
 
     private void DrawOrderLabels()
@@ -449,13 +658,15 @@ public class DeliveryOrderManager : MonoBehaviour
             }
 
             Rect rect = new Rect(screen.x - 55f, Screen.height - screen.y - 15f, 110f, 30f);
-            GUI.Box(rect, $"ORDER {i + 1}");
+            if (GUI.Button(rect, $"ORDER {i + 1}"))
+            {
+                OpenOrder(i);
+            }
         }
     }
 
     private void ClosePopups()
     {
-        showOffers = false;
         selectedOrder = -1;
         IsPopupOpen = false;
     }
