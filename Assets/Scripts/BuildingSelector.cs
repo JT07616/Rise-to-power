@@ -279,6 +279,8 @@ public class BuildingSelector : MonoBehaviour
                 return "HIRE WORKERS";
             case BuildingRole.Warehouse:
                 return "WAREHOUSE";
+            case BuildingRole.CorruptOfficer:
+                return "CORRUPT OFFICER";
             default:
                 return "BUILDING";
         }

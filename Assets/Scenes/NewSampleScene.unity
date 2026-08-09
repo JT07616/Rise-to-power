@@ -213416,6 +213416,65 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 6ef6c71a8e60167498cee5f9678076e5, type: 3}
+--- !u!1 &940230444 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1636341099028001728, guid: 6ef6c71a8e60167498cee5f9678076e5, type: 3}
+  m_PrefabInstance: {fileID: 2052814575}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &940230445
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 940230444}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7def17a520ae3dd479e2727d0e65ad4d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
+  buildingName: Corrupt Officer
+  buildingRole: 4
+  description: You meet a corrupt officer here, away from the station and anyone who might recognize either of you.
+  hasProductionControls: 1
+  requiresPurchase: 1
+  isPurchased: 0
+  purchaseCost: 2000
+  purchaseButtonText: Buy the officer's trust
+  purchaseDescription: Before he risks his badge for you, you must prove that the relationship is worth the danger.
+  showIncreaseAction: 0
+  showDecreaseAction: 0
+  hasUpgrade: 0
+  riskProtectionCost: 800
+  riskProtectionTurns: 2
+  raidBribeCost: 1200
+  officerActionCooldownTurns: 5
+  riskProtectionButtonText: Pay for protection
+  raidBribeButtonText: Bribe raid contact
+  hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  selectedColor: {r: 0, g: 0, b: 1, a: 1}
+--- !u!64 &940230446
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 940230444}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 4300000, guid: 25449c1a4c4ca004ead70b6c0889695b, type: 3}
 --- !u!1001 &940331011
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -463159,7 +463218,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1636341099028001728, guid: 6ef6c71a8e60167498cee5f9678076e5, type: 3}
       propertyPath: m_Name
-      value: Building_Gas Station
+      value: Backroom Meeting Spot
       objectReference: {fileID: 0}
     - target: {fileID: 6238399050891378405, guid: 6ef6c71a8e60167498cee5f9678076e5, type: 3}
       propertyPath: m_LocalPosition.x
@@ -463204,7 +463263,13 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1636341099028001728, guid: 6ef6c71a8e60167498cee5f9678076e5, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 940230445}
+    - targetCorrespondingSourceObject: {fileID: 1636341099028001728, guid: 6ef6c71a8e60167498cee5f9678076e5, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 940230446}
   m_SourcePrefab: {fileID: 100100000, guid: 6ef6c71a8e60167498cee5f9678076e5, type: 3}
 --- !u!4 &2052814576 stripped
 Transform:

@@ -63,7 +63,7 @@ public static class SharedActionRules
         int workersRequired)
     {
         return resources != null && goodsPerBatch > 0 && workersRequired > 0 &&
-               resources.CanAfford(resources.WorkerPayPerAction) &&
+               resources.CanAfford(GetProductionWorkerCost(resources, goodsPerBatch)) &&
                resources.FactoryGoods + goodsPerBatch <= resources.FactoryCapacity &&
                resources.FreeWorkers >= workersRequired;
     }
@@ -74,8 +74,9 @@ public static class SharedActionRules
         int workersRequired,
         float durationSeconds)
     {
+        int workerCost = GetProductionWorkerCost(resources, goodsPerBatch);
         if (!CanStartProduction(resources, goodsPerBatch, workersRequired) ||
-            !resources.TrySpendMoney(resources.WorkerPayPerAction))
+            !resources.TrySpendMoney(workerCost))
         {
             return false;
         }
@@ -85,8 +86,14 @@ public static class SharedActionRules
             return true;
         }
 
-        resources.Money += resources.WorkerPayPerAction;
+        resources.Money += workerCost;
         return false;
+    }
+
+    public static int GetProductionWorkerCost(IActionResources resources, int goods)
+    {
+        int basePay = resources != null ? resources.WorkerPayPerAction : 15;
+        return Mathf.Max(basePay, 25 + Mathf.CeilToInt(Mathf.Max(0, goods) / 4f));
     }
 
     public static bool CanStartTransfer(IActionResources resources)
@@ -120,7 +127,7 @@ public static class SharedActionRules
     {
         return resources != null && goods > 0 &&
                resources.WarehouseGoods >= goods &&
-               resources.CanAfford(resources.WorkerPayPerAction) &&
+               resources.CanAfford(GetDeliveryWorkerCost(resources, goods)) &&
                resources.FreeWorkers > 0;
     }
 
@@ -129,15 +136,16 @@ public static class SharedActionRules
         int goods,
         float durationSeconds)
     {
+        int workerCost = GetDeliveryWorkerCost(resources, goods);
         if (!CanStartDelivery(resources, goods) ||
-            !resources.TrySpendMoney(resources.WorkerPayPerAction))
+            !resources.TrySpendMoney(workerCost))
         {
             return false;
         }
 
         if (!resources.TryConsumeWarehouseGoods(goods))
         {
-            resources.Money += resources.WorkerPayPerAction;
+            resources.Money += workerCost;
             return false;
         }
 
@@ -147,8 +155,14 @@ public static class SharedActionRules
         }
 
         resources.WarehouseGoods += goods;
-        resources.Money += resources.WorkerPayPerAction;
+        resources.Money += workerCost;
         return false;
+    }
+
+    public static int GetDeliveryWorkerCost(IActionResources resources, int goods)
+    {
+        int basePay = resources != null ? resources.WorkerPayPerAction : 15;
+        return Mathf.Max(basePay, 25 + Mathf.CeilToInt(Mathf.Max(0, goods) / 2f));
     }
 
     public static void CompleteProduction(IActionResources resources, int goods)
@@ -441,7 +455,19 @@ public class GameResources : MonoBehaviour, IActionResources
     public int GoodsInTransit { get { return robaUTransportu; } set { robaUTransportu = value; } }
     public int FactoryCapacity { get { return kapacitetTvornice; } set { kapacitetTvornice = value; } }
     public int WarehouseCapacity { get { return kapacitetSkladista; } set { kapacitetSkladista = value; } }
-    public int Risk { get { return rizik; } set { rizik = value; } }
+    public int Risk
+    {
+        get { return rizik; }
+        set
+        {
+            if (value > rizik && IsRiskProtectionActive)
+            {
+                return;
+            }
+
+            rizik = value;
+        }
+    }
     public int Influence { get { return utjecaj; } set { utjecaj = value; } }
     public int Workers { get { return radnici; } set { radnici = value; } }
     public int WorkerPayPerAction { get { return placaRadnikaPoZadatku; } }
@@ -450,6 +476,28 @@ public class GameResources : MonoBehaviour, IActionResources
     [Header("Police")]
     public int policeRaidCount = 0;
     public int maxPoliceRaids = 3;
+    [SerializeField] private int riskProtectionThroughDay;
+    [SerializeField] private bool skipNextPoliceRaid;
+
+    public bool IsRiskProtectionActive
+    {
+        get { return GameEventManager.CurrentDay <= riskProtectionThroughDay; }
+    }
+
+    public int RiskProtectionTurnsRemaining
+    {
+        get
+        {
+            return IsRiskProtectionActive
+                ? riskProtectionThroughDay - GameEventManager.CurrentDay + 1
+                : 0;
+        }
+    }
+
+    public bool WillSkipNextPoliceRaid
+    {
+        get { return skipNextPoliceRaid; }
+    }
 
     [Header("Game state")]
     public bool gameOver = false;
@@ -487,11 +535,36 @@ public class GameResources : MonoBehaviour, IActionResources
     public void Apply(int dNovac, int dRizik, int dRadnici)
     {
         novac += dNovac;
-        rizik += dRizik;
+        Risk = rizik + dRizik;
         radnici += dRadnici;
 
         EvaluateGameOver();
         Clamp();
+    }
+
+    public void ActivateRiskProtection(int turns)
+    {
+        int protectedTurns = Mathf.Max(1, turns);
+        riskProtectionThroughDay = Mathf.Max(
+            riskProtectionThroughDay,
+            GameEventManager.CurrentDay + protectedTurns - 1);
+    }
+
+    public void PrepareRaidBribe()
+    {
+        skipNextPoliceRaid = true;
+    }
+
+    public bool ConsumeRaidBribe()
+    {
+        if (!skipNextPoliceRaid)
+        {
+            return false;
+        }
+
+        skipNextPoliceRaid = false;
+        rizik = 30;
+        return true;
     }
 
     public void AddFactoryGoods(int amount)

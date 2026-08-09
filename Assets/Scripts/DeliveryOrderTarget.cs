@@ -27,6 +27,15 @@ public class DeliveryOrderTarget : MonoBehaviour
         }
     }
 
+    public int PlayerCaptureRequirement
+    {
+        get
+        {
+            TerritoryHouse house = GetTerritoryHouse(false);
+            return house != null ? house.GetCaptureRequirement(TerritoryOwner.Player) : 6;
+        }
+    }
+
     public void Configure(DeliveryOrderManager orderOwner, int index)
     {
         owner = orderOwner;
@@ -58,7 +67,9 @@ public class DeliveryOrderTarget : MonoBehaviour
         RestoreColor();
     }
 
-    public bool RegisterCompletedDelivery(TerritoryOwner deliveryOwner = TerritoryOwner.Player)
+    public bool RegisterCompletedDelivery(
+        TerritoryOwner deliveryOwner = TerritoryOwner.Player,
+        int capturePoints = 1)
     {
         TerritoryHouse house = GetTerritoryHouse(true);
         if (house == null)
@@ -66,7 +77,7 @@ public class DeliveryOrderTarget : MonoBehaviour
             return false;
         }
 
-        bool captured = house.RegisterDelivery(deliveryOwner);
+        bool captured = house.RegisterDelivery(deliveryOwner, capturePoints);
 
         if (targetRenderer != null && house.Owner != TerritoryOwner.Neutral)
         {
@@ -228,6 +239,16 @@ public class TerritoryHouse : MonoBehaviour
                side == TerritoryOwner.AI ? aiCaptureProgress : 0;
     }
 
+    public int GetCaptureRequirement(TerritoryOwner side)
+    {
+        if (side == TerritoryOwner.Neutral || owner == side)
+        {
+            return 0;
+        }
+
+        return owner == TerritoryOwner.Neutral ? 6 : 10;
+    }
+
     public void InitializeOwner(TerritoryOwner initialOwner)
     {
         if (owner == TerritoryOwner.Neutral && playerCaptureProgress == 0 && aiCaptureProgress == 0)
@@ -236,7 +257,7 @@ public class TerritoryHouse : MonoBehaviour
         }
     }
 
-    public bool RegisterDelivery(TerritoryOwner side)
+    public bool RegisterDelivery(TerritoryOwner side, int capturePoints = 1)
     {
         if (side == TerritoryOwner.Neutral)
         {
@@ -252,18 +273,18 @@ public class TerritoryHouse : MonoBehaviour
 
         if (side == TerritoryOwner.Player)
         {
-            playerCaptureProgress++;
+            playerCaptureProgress += Mathf.Max(1, capturePoints);
             aiCaptureProgress = 0;
-            if (playerCaptureProgress < 2)
+            if (playerCaptureProgress < GetCaptureRequirement(side))
             {
                 return false;
             }
         }
         else
         {
-            aiCaptureProgress++;
+            aiCaptureProgress += Mathf.Max(1, capturePoints);
             playerCaptureProgress = 0;
-            if (aiCaptureProgress < 2)
+            if (aiCaptureProgress < GetCaptureRequirement(side))
             {
                 return false;
             }

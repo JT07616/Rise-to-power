@@ -20,9 +20,32 @@ public class DeliveryOrderManager : MonoBehaviour
 
     private readonly List<DeliveryOrder> orders = new List<DeliveryOrder>();
     private readonly List<DeliveryOrder> activeDeliveries = new List<DeliveryOrder>();
+    private readonly List<DeliveryOrder> pendingPlayerDeliveries = new List<DeliveryOrder>();
     private readonly List<AiDelivery> activeAiDeliveries = new List<AiDelivery>();
     private int generatedDay = -1;
     private int selectedOrder = -1;
+
+    public static int PendingPlayerRisk
+    {
+        get
+        {
+            if (instance == null)
+            {
+                return 0;
+            }
+
+            int pendingRisk = 0;
+            foreach (DeliveryOrder order in instance.pendingPlayerDeliveries)
+            {
+                if (order != null && order.inProgress && !order.completed)
+                {
+                    pendingRisk += order.risk;
+                }
+            }
+
+            return pendingRisk;
+        }
+    }
 
     private static readonly string[] AliasPrefixes =
     {
@@ -47,6 +70,8 @@ public class DeliveryOrderManager : MonoBehaviour
         public float finishTime;
         public bool inProgress;
         public bool completed;
+        public TerritoryOwner territoryOwner;
+        public float marketMultiplier;
         public DeliveryOrderTarget target;
     }
 
@@ -280,24 +305,32 @@ public class DeliveryOrderManager : MonoBehaviour
 
         List<MeshCollider> candidates = FindDeliveryCandidates();
         Shuffle(candidates);
+        List<MeshCollider> selectedCandidates = SelectVariedCandidates(candidates);
         List<string> customerNames = BuildCustomerAliases();
         Shuffle(customerNames);
         Vector3 factoryPosition = GetFactoryPosition();
+        GetOrderSizeRange(out int minimumGoods, out int maximumGoods);
 
-        int offerCount = Mathf.Min(offersPerDay, candidates.Count);
+        int offerCount = selectedCandidates.Count;
         for (int i = 0; i < offerCount; i++)
         {
-            MeshCollider candidate = candidates[i];
+            MeshCollider candidate = selectedCandidates[i];
             DeliveryOrderTarget target = candidate.gameObject.AddComponent<DeliveryOrderTarget>();
             target.Configure(this, i);
 
-            int grams = Random.Range(minGoodsPerDelivery, maxGoodsPerDelivery + 1);
+            int grams = Random.Range(minimumGoods, maximumGoods + 1);
             float distance = Vector3.Distance(factoryPosition, candidate.transform.position);
             float baseDuration = distance / deliverySpeed + grams * handlingSecondsPerGram;
             float duration = Mathf.Max(minimumDeliverySeconds, baseDuration * Random.Range(0.85f, 1.2f));
-            int reward = Mathf.RoundToInt((grams * pricePerGram + distance * distancePricePerUnit) * Random.Range(0.9f, 1.15f));
+            TerritoryOwner territoryOwner = GetTerritoryOwner(candidate);
+            float marketMultiplier = Random.Range(0.8f, 1.4f);
+            float territoryRewardMultiplier = GetTerritoryRewardMultiplier(territoryOwner);
+            int reward = Mathf.RoundToInt(
+                (grams * pricePerGram + distance * distancePricePerUnit) *
+                marketMultiplier * territoryRewardMultiplier);
+            float baseRisk = minRisk + grams / 7f + distance / 100f + Random.Range(0f, 4f);
             int risk = Mathf.Clamp(
-                Mathf.RoundToInt(minRisk + grams / 5f + distance / 40f + Random.Range(0f, 4f)),
+                Mathf.RoundToInt(GetTerritoryRisk(baseRisk, territoryOwner)),
                 minRisk,
                 Mathf.Max(minRisk, maxRisk));
 
@@ -309,6 +342,8 @@ public class DeliveryOrderManager : MonoBehaviour
                 grams = grams,
                 distance = distance,
                 duration = duration,
+                territoryOwner = territoryOwner,
+                marketMultiplier = marketMultiplier,
                 target = target
             });
         }
@@ -319,6 +354,109 @@ public class DeliveryOrderManager : MonoBehaviour
         if (orders.Count < offersPerDay)
         {
             Debug.LogWarning($"Only {orders.Count} suitable delivery buildings were found; expected {offersPerDay}.");
+        }
+    }
+
+    private void GetOrderSizeRange(out int minimumGoods, out int maximumGoods)
+    {
+        int warehouseLevel = 0;
+        BuildingInfo[] buildings = FindObjectsByType<BuildingInfo>(FindObjectsSortMode.None);
+        foreach (BuildingInfo building in buildings)
+        {
+            if (building != null && building.buildingRole == BuildingRole.Warehouse)
+            {
+                warehouseLevel = Mathf.Clamp(building.upgradeLevel, 0, 3);
+                break;
+            }
+        }
+
+        int[] minimumByLevel = { 5, 15, 25, 40 };
+        int[] maximumByLevel = { 35, 60, 90, 150 };
+        minimumGoods = Mathf.Max(minGoodsPerDelivery, minimumByLevel[warehouseLevel]);
+        maximumGoods = Mathf.Max(minimumGoods, maximumByLevel[warehouseLevel]);
+    }
+
+    private List<MeshCollider> SelectVariedCandidates(List<MeshCollider> candidates)
+    {
+        List<MeshCollider> selected = new List<MeshCollider>();
+        if (selected.Count < offersPerDay) AddCandidateForTerritory(candidates, selected, TerritoryOwner.Player);
+        if (selected.Count < offersPerDay) AddCandidateForTerritory(candidates, selected, TerritoryOwner.Neutral);
+        if (selected.Count < offersPerDay) AddCandidateForTerritory(candidates, selected, TerritoryOwner.AI);
+
+        foreach (MeshCollider candidate in candidates)
+        {
+            if (selected.Count >= offersPerDay)
+            {
+                break;
+            }
+
+            if (!selected.Contains(candidate))
+            {
+                selected.Add(candidate);
+            }
+        }
+
+        Shuffle(selected);
+        return selected;
+    }
+
+    private static void AddCandidateForTerritory(
+        List<MeshCollider> candidates,
+        List<MeshCollider> selected,
+        TerritoryOwner owner)
+    {
+        foreach (MeshCollider candidate in candidates)
+        {
+            if (!selected.Contains(candidate) && GetTerritoryOwner(candidate) == owner)
+            {
+                selected.Add(candidate);
+                return;
+            }
+        }
+    }
+
+    private static TerritoryOwner GetTerritoryOwner(MeshCollider candidate)
+    {
+        if (candidate == null)
+        {
+            return TerritoryOwner.Neutral;
+        }
+
+        Renderer renderer = candidate.GetComponent<Renderer>();
+        if (renderer == null)
+        {
+            renderer = candidate.GetComponentInChildren<Renderer>();
+        }
+
+        TerritoryHouse house = renderer != null
+            ? renderer.GetComponent<TerritoryHouse>()
+            : null;
+        return house != null ? house.Owner : TerritoryOwner.Neutral;
+    }
+
+    private static float GetTerritoryRewardMultiplier(TerritoryOwner owner)
+    {
+        switch (owner)
+        {
+            case TerritoryOwner.Player:
+                return 0.9f;
+            case TerritoryOwner.AI:
+                return 1.4f;
+            default:
+                return 1f;
+        }
+    }
+
+    private static float GetTerritoryRisk(float baseRisk, TerritoryOwner owner)
+    {
+        switch (owner)
+        {
+            case TerritoryOwner.Player:
+                return baseRisk * 0.7f;
+            case TerritoryOwner.AI:
+                return baseRisk + 10f;
+            default:
+                return baseRisk + 3f;
         }
     }
 
@@ -379,12 +517,25 @@ public class DeliveryOrderManager : MonoBehaviour
         GameResources resources = GameResources.Instance;
         GUILayout.Space(12f);
         GUILayout.Label($"Customer: {order.customerName}");
+        GUILayout.Label($"Territory: {GetTerritoryName(order.territoryOwner)}");
         GUILayout.Label($"Requested goods: {order.grams} g");
         int completedAtHouse = order.target != null ? order.target.CompletedDeliveryCount : 0;
-        GUILayout.Label($"Territory progress at this house: {Mathf.Min(2, completedAtHouse)}/2");
+        int captureRequirement = order.target != null ? order.target.PlayerCaptureRequirement : 6;
+        if (captureRequirement > 0)
+        {
+            GUILayout.Label($"Territory progress at this house: {Mathf.Min(captureRequirement, completedAtHouse)}/{captureRequirement}");
+        }
+        else
+        {
+            GUILayout.Label("Territory status: already controlled by you");
+        }
         GUILayout.Label($"Payment: +{order.reward} €");
+        GUILayout.Label($"Market demand: {GetDemandName(order.marketMultiplier)}");
+        GUILayout.Label(GetTerritoryTerms(order.territoryOwner));
         GUILayout.Label($"Police risk: +{order.risk}");
-        GUILayout.Label($"Worker pay: -{resources?.placaRadnikaPoZadatku ?? 15} €");
+        int workerCost = SharedActionRules.GetDeliveryWorkerCost(resources, order.grams);
+        GUILayout.Label($"Worker pay: -{workerCost} €");
+        GUILayout.Label($"Net profit: +{Mathf.Max(0, order.reward - workerCost)} €");
         GUILayout.Label($"Distance from factory: {order.distance:0} m");
         GUILayout.Label($"Estimated delivery time: {order.duration:0} seconds");
 
@@ -406,6 +557,47 @@ public class DeliveryOrderManager : MonoBehaviour
         GUI.enabled = true;
     }
 
+    private static string GetTerritoryName(TerritoryOwner owner)
+    {
+        switch (owner)
+        {
+            case TerritoryOwner.Player:
+                return "YOUR TERRITORY";
+            case TerritoryOwner.AI:
+                return "RIVAL TERRITORY";
+            default:
+                return "NEUTRAL TERRITORY";
+        }
+    }
+
+    private static string GetTerritoryTerms(TerritoryOwner owner)
+    {
+        switch (owner)
+        {
+            case TerritoryOwner.Player:
+                return "Safe route: -30% risk, -10% territory payment.";
+            case TerritoryOwner.AI:
+                return "Hostile route: +10 risk, +40% territory payment.";
+            default:
+                return "Uncontrolled route: +3 risk, standard territory payment.";
+        }
+    }
+
+    private static string GetDemandName(float multiplier)
+    {
+        if (multiplier >= 1.25f)
+        {
+            return "HIGH (premium price)";
+        }
+
+        if (multiplier < 0.95f)
+        {
+            return "LOW (poor price)";
+        }
+
+        return "NORMAL";
+    }
+
     private void CompleteDelivery(DeliveryOrder order)
     {
         if (order == null || order.completed || order.inProgress || !CanCompleteDelivery(order))
@@ -420,6 +612,7 @@ public class DeliveryOrderManager : MonoBehaviour
         }
 
         order.inProgress = true;
+        pendingPlayerDeliveries.Add(order);
 
         Vector3 startPosition = GetVehicleStartPosition();
         Vector3 destinationPosition = order.target != null
@@ -458,6 +651,7 @@ public class DeliveryOrderManager : MonoBehaviour
 
         order.inProgress = false;
         order.completed = true;
+        pendingPlayerDeliveries.Remove(order);
         int influence = Mathf.Max(1, Mathf.CeilToInt(order.grams / 10f));
 
         if (GameResources.Instance != null)
@@ -469,7 +663,8 @@ public class DeliveryOrderManager : MonoBehaviour
                 influence);
         }
 
-        bool territoryCaptured = order.target != null && order.target.RegisterCompletedDelivery();
+        bool territoryCaptured = order.target != null &&
+                                 order.target.RegisterCompletedDelivery(TerritoryOwner.Player, influence);
         if (order.target != null)
         {
             order.target.Deactivate();
@@ -478,7 +673,7 @@ public class DeliveryOrderManager : MonoBehaviour
         Debug.Log($"Delivery completed for {order.customerName}: {order.grams} g, +{order.reward} €, risk +{order.risk}.");
         if (territoryCaptured)
         {
-            Debug.Log($"House captured after the second delivery for {order.customerName}.");
+            Debug.Log($"Territory captured after delivering enough influence for {order.customerName}.");
         }
     }
 
@@ -500,6 +695,7 @@ public class DeliveryOrderManager : MonoBehaviour
 
             order.inProgress = false;
             order.completed = true;
+            pendingPlayerDeliveries.Remove(order);
             int influence = Mathf.Max(1, Mathf.CeilToInt(order.grams / 10f));
             if (GameResources.Instance != null)
             {
@@ -510,7 +706,8 @@ public class DeliveryOrderManager : MonoBehaviour
                     influence);
             }
 
-            bool territoryCaptured = order.target != null && order.target.RegisterCompletedDelivery();
+            bool territoryCaptured = order.target != null &&
+                                     order.target.RegisterCompletedDelivery(TerritoryOwner.Player, influence);
             if (order.target != null)
             {
                 order.target.Deactivate();
@@ -519,7 +716,7 @@ public class DeliveryOrderManager : MonoBehaviour
             Debug.Log($"Delivery completed for {order.customerName}: {order.grams} g, +{order.reward} €, risk +{order.risk}.");
             if (territoryCaptured)
             {
-                Debug.Log($"House captured after the second delivery for {order.customerName}.");
+                Debug.Log($"Territory captured after delivering enough influence for {order.customerName}.");
             }
             activeDeliveries.RemoveAt(i);
         }
@@ -557,7 +754,7 @@ public class DeliveryOrderManager : MonoBehaviour
             ? delivery.target.Owner
             : TerritoryOwner.Neutral;
         bool captured = delivery.target != null &&
-            delivery.target.RegisterDelivery(TerritoryOwner.AI);
+            delivery.target.RegisterDelivery(TerritoryOwner.AI, influence);
 
         if (captured && delivery.targetRenderer != null &&
             delivery.targetRenderer.GetComponent<DeliveryOrderTarget>() == null)
@@ -658,7 +855,10 @@ public class DeliveryOrderManager : MonoBehaviour
             }
 
             Rect rect = new Rect(screen.x - 55f, Screen.height - screen.y - 15f, 110f, 30f);
-            if (GUI.Button(rect, $"ORDER {i + 1}"))
+            string territoryLabel = order.territoryOwner == TerritoryOwner.Player
+                ? "SAFE"
+                : order.territoryOwner == TerritoryOwner.AI ? "RIVAL" : "NEUTRAL";
+            if (GUI.Button(rect, $"{territoryLabel} {i + 1}"))
             {
                 OpenOrder(i);
             }
