@@ -5,7 +5,8 @@ public enum BuildingRole
     General,
     Factory,
     WorkerContact,
-    Warehouse
+    Warehouse,
+    CorruptOfficer
 }
 
 public class BuildingInfo : MonoBehaviour
@@ -72,6 +73,21 @@ public class BuildingInfo : MonoBehaviour
     public int upgradeRizik = -5;
     public int upgradeRadnici = 0;
 
+    [Header("Corrupt officer")]
+    [Min(0)] public int riskProtectionCost = 300;
+    [Min(1)] public int riskProtectionTurns = 3;
+    [Min(0)] public int raidBribeCost = 500;
+    [Min(0)] public int officerActionCooldownTurns = 3;
+    public string riskProtectionButtonText = "Pay for protection";
+    public string raidBribeButtonText = "Bribe raid contact";
+
+    [Header("Emergency favor")]
+    [Min(0)] public int emergencyActionBaseCost = 700;
+    [Min(0)] public int emergencyActionCostIncrease = 400;
+    [Min(0)] public int emergencyActionRisk = 6;
+    [Min(1)] public int emergencyActionCooldownTurns = 3;
+    public string emergencyActionButtonText = "Call in a favor";
+
     [Header("Goods production")]
     public bool producesGoods = false;
     [Min(1)] public int goodsPerBatch = 50;
@@ -89,6 +105,9 @@ public class BuildingInfo : MonoBehaviour
     private Renderer labelRenderer;
     private Color[] originalColors;
     private int lastActionDay = -1000;
+    private int lastOfficerActionDay = -1000;
+    private int lastEmergencyActionDay = -1000;
+    private int emergencyActionsPurchased;
     private float productionFinishTime = -1f;
 
     public bool IsProducingGoods
@@ -112,6 +131,13 @@ public class BuildingInfo : MonoBehaviour
 
     void Awake()
     {
+        if (buildingRole == BuildingRole.CorruptOfficer)
+        {
+            ConfigureCorruptOfficer();
+        }
+
+        ConfigureUpgradeProgression();
+
         renderers = GetComponentsInChildren<Renderer>();
         labelRenderer = GetComponent<Renderer>();
         if (labelRenderer == null)
@@ -123,6 +149,74 @@ public class BuildingInfo : MonoBehaviour
         for (int i = 0; i < renderers.Length; i++)
         {
             originalColors[i] = renderers[i].material.color;
+        }
+    }
+
+    private void ConfigureCorruptOfficer()
+    {
+        gameObject.name = "Backroom Meeting Spot";
+        buildingName = "Corrupt Officer";
+        description = "You meet a corrupt officer here, away from the station and anyone who might recognize either of you.";
+        hasProductionControls = true;
+        requiresPurchase = true;
+        isPurchased = false;
+        purchaseCost = 2000;
+        purchaseButtonText = "Buy the officer's trust";
+        purchaseDescription = "Before he risks his badge for you, you must prove that the relationship is worth the danger.";
+        showIncreaseAction = false;
+        showDecreaseAction = false;
+        hasUpgrade = false;
+        riskProtectionCost = 800;
+        riskProtectionTurns = 2;
+        raidBribeCost = 1200;
+        officerActionCooldownTurns = 5;
+    }
+
+    private void ConfigureUpgradeProgression()
+    {
+        if (buildingRole == BuildingRole.Factory)
+        {
+            hasUpgrade = true;
+            maxUpgradeLevel = 3;
+            upgradeRizik = 0;
+            upgradeRadnici = 0;
+            upgradeButtonText = "Expand production";
+            upgradeDescription = "Larger equipment increases batch size, factory capacity, and eventually production speed.";
+        }
+        else if (buildingRole == BuildingRole.Warehouse)
+        {
+            hasUpgrade = true;
+            maxUpgradeLevel = 3;
+            upgradeRizik = 0;
+            upgradeRadnici = 0;
+            upgradeButtonText = "Expand warehouse";
+            upgradeDescription = "More storage lets you prepare larger stockpiles before accepting deliveries.";
+        }
+        else if (buildingRole == BuildingRole.WorkerContact)
+        {
+            emergencyActionBaseCost = 700;
+            emergencyActionCostIncrease = 400;
+            emergencyActionRisk = 6;
+            emergencyActionCooldownTurns = 3;
+            emergencyActionButtonText = "Call in a favor";
+        }
+        else if (buildingName == "Apartment")
+        {
+            hasUpgrade = true;
+            maxUpgradeLevel = 3;
+            upgradeRizik = 0;
+            upgradeRadnici = 0;
+            actionCooldownEvents = Mathf.Max(3, actionCooldownEvents);
+            upgradeButtonText = "Improve safehouse";
+            upgradeDescription = "A safer routine makes laying low more effective, but always needs at least three turns to cool down.";
+        }
+    }
+
+    void Start()
+    {
+        if (upgradeLevel > 0)
+        {
+            ApplyUpgradeBenefits();
         }
     }
 
@@ -162,6 +256,11 @@ public class BuildingInfo : MonoBehaviour
 
     public string GetFullDescription()
     {
+        if (buildingRole == BuildingRole.CorruptOfficer)
+        {
+            return GetCorruptOfficerDescription();
+        }
+
         if (!hasProductionControls)
         {
             return description;
@@ -234,6 +333,108 @@ public class BuildingInfo : MonoBehaviour
         return GetShortButtonLabel(moveGoodsButtonText);
     }
 
+    public string GetRiskProtectionButtonLabel()
+    {
+        return GetShortButtonLabel(riskProtectionButtonText);
+    }
+
+    public string GetRaidBribeButtonLabel()
+    {
+        return GetShortButtonLabel(raidBribeButtonText);
+    }
+
+    public string GetEmergencyActionButtonLabel()
+    {
+        return $"{emergencyActionButtonText} - {GetEmergencyActionCost()} €";
+    }
+
+    public bool CanBuyEmergencyAction()
+    {
+        return buildingRole == BuildingRole.WorkerContact && IsUnlocked() &&
+               GameEventManager.CanPlayerAct && !IsEmergencyActionOnCooldown() &&
+               GameResources.Instance != null &&
+               GameResources.Instance.CanAfford(GetEmergencyActionCost());
+    }
+
+    public void BuyEmergencyAction()
+    {
+        if (!CanBuyEmergencyAction())
+        {
+            return;
+        }
+
+        int cost = GetEmergencyActionCost();
+        if (!SharedActionRules.TryApplyResourceChange(
+                GameResources.Instance,
+                -cost,
+                emergencyActionRisk,
+                0))
+        {
+            return;
+        }
+
+        emergencyActionsPurchased++;
+        lastEmergencyActionDay = GameEventManager.CurrentDay;
+        GameEventManager.GrantEmergencyAction();
+        Debug.Log($"Emergency favor bought for {cost} €. Next favor costs {GetEmergencyActionCost()} €.");
+    }
+
+    public bool CanBuyRiskProtection()
+    {
+        return buildingRole == BuildingRole.CorruptOfficer && IsUnlocked() &&
+               GameEventManager.CanPlayerAct && !IsOfficerActionOnCooldown() &&
+               GameResources.Instance != null &&
+               !GameResources.Instance.IsRiskProtectionActive &&
+               GameResources.Instance.CanAfford(riskProtectionCost);
+    }
+
+    public void BuyRiskProtection()
+    {
+        if (!CanBuyRiskProtection())
+        {
+            return;
+        }
+
+        GameResources resources = GameResources.Instance;
+        if (!resources.TrySpendMoney(riskProtectionCost))
+        {
+            return;
+        }
+
+        resources.ActivateRiskProtection(riskProtectionTurns);
+        lastOfficerActionDay = GameEventManager.CurrentDay;
+        GameEventManager.CompletePlayerAction();
+        Debug.Log($"Police protection active for {riskProtectionTurns} turns.");
+    }
+
+    public bool CanBuyRaidBribe()
+    {
+        return buildingRole == BuildingRole.CorruptOfficer && IsUnlocked() &&
+               GameEventManager.CanPlayerAct && !IsOfficerActionOnCooldown() &&
+               GameResources.Instance != null &&
+               !GameResources.Instance.WillSkipNextPoliceRaid &&
+               GameResources.Instance.CanAfford(raidBribeCost);
+    }
+
+    public void BuyRaidBribe()
+    {
+        if (!CanBuyRaidBribe())
+        {
+            return;
+        }
+
+        GameResources resources = GameResources.Instance;
+        if (!resources.TrySpendMoney(raidBribeCost))
+        {
+            return;
+        }
+
+        resources.PrepareRaidBribe();
+        lastOfficerActionDay = GameEventManager.CurrentDay;
+        GameEventManager.CompletePlayerAction();
+        Debug.Log("The next police raid will be skipped and will leave risk at 30.");
+    }
+
     public bool IsUnlocked()
     {
         return !requiresPurchase || isPurchased;
@@ -266,6 +467,7 @@ public class BuildingInfo : MonoBehaviour
     {
         return hasProductionControls && hasUpgrade && IsUnlocked() &&
                GameEventManager.CanPlayerAct && upgradeLevel < maxUpgradeLevel &&
+               (buildingRole != BuildingRole.Factory || !IsProducingGoods) &&
                HasEnoughMoneyFor(-GetUpgradeCost());
     }
 
@@ -380,10 +582,7 @@ public class BuildingInfo : MonoBehaviour
         }
 
         upgradeLevel++;
-        if (buildingRole == BuildingRole.Warehouse)
-        {
-            GameResources.Instance.kapacitetSkladista += warehouseCapacityPerUpgrade;
-        }
+        ApplyUpgradeBenefits();
         GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: upgraded to level {upgradeLevel}/{maxUpgradeLevel} for {cost} €.");
     }
@@ -477,7 +676,8 @@ public class BuildingInfo : MonoBehaviour
         GameResources resources = GameResources.Instance;
         string stock = resources == null ? "" :
             $" Factory stock: {resources.robaUTvornici}/{resources.kapacitetTvornice} g.";
-        string workerPay = resources == null ? "" : $" Worker pay: {resources.placaRadnikaPoZadatku} €.";
+        string workerPay = resources == null ? "" :
+            $" Worker pay: {SharedActionRules.GetProductionWorkerCost(resources, goodsPerBatch)} €.";
         return $"Production: {goodsPerBatch} g in {productionDurationSeconds:0} seconds, " +
                $"requires {productionWorkersRequired} free worker(s).{workerPay}{stock}";
     }
@@ -492,6 +692,65 @@ public class BuildingInfo : MonoBehaviour
 
         string transfer = resources.TransportUTijeku ? $" {resources.robaUTransportu} g is being moved." : "";
         return $"Warehouse: {resources.robaUSkladistu}/{resources.kapacitetSkladista} g.{transfer}";
+    }
+
+    private string GetCorruptOfficerDescription()
+    {
+        GameResources resources = GameResources.Instance;
+        if (resources == null)
+        {
+            return description;
+        }
+
+        if (!IsUnlocked())
+        {
+            return description + "\n\n" + purchaseDescription +
+                   $"\n\nTrust payment: {purchaseCost} €";
+        }
+
+        string protectionStatus = resources.IsRiskProtectionActive
+            ? $"Protection active for {resources.RiskProtectionTurnsRemaining} more turn(s)."
+            : "Protection is not active.";
+        string raidStatus = resources.WillSkipNextPoliceRaid
+            ? "Your contact will cancel the next police raid."
+            : "No raid bribe is prepared.";
+        int cooldownRemaining = GetOfficerActionCooldownTurnsRemaining();
+        string cooldownStatus = cooldownRemaining > 0
+            ? $"The officer will not meet you for another {cooldownRemaining} turn(s)."
+            : "The officer is available for another favor.";
+
+        return description + "\n\n" +
+               $"Current risk: {resources.rizik}\n" +
+               $"Pay {riskProtectionCost} € to prevent all risk increases for {riskProtectionTurns} turns.\n" +
+               $"Pay {raidBribeCost} € to cancel the next police raid; after it is blocked, risk falls to 30.\n\n" +
+               protectionStatus + "\n" + raidStatus + "\n" + cooldownStatus;
+    }
+
+    private bool IsOfficerActionOnCooldown()
+    {
+        return GetOfficerActionCooldownTurnsRemaining() > 0;
+    }
+
+    private int GetOfficerActionCooldownTurnsRemaining()
+    {
+        int turnsPassed = GameEventManager.CurrentDay - lastOfficerActionDay;
+        return Mathf.Max(0, officerActionCooldownTurns - turnsPassed);
+    }
+
+    private int GetEmergencyActionCost()
+    {
+        return emergencyActionBaseCost + emergencyActionCostIncrease * emergencyActionsPurchased;
+    }
+
+    private bool IsEmergencyActionOnCooldown()
+    {
+        return GetEmergencyActionCooldownTurnsRemaining() > 0;
+    }
+
+    private int GetEmergencyActionCooldownTurnsRemaining()
+    {
+        int turnsPassed = GameEventManager.CurrentDay - lastEmergencyActionDay;
+        return Mathf.Max(0, emergencyActionCooldownTurns - turnsPassed);
     }
 
     private float GetTransferDurationSeconds()
@@ -537,6 +796,21 @@ public class BuildingInfo : MonoBehaviour
         if (hasUpgrade && upgradeLevel < maxUpgradeLevel)
         {
             actionText += $"\n- {GetUpgradeButtonLabel()}: costs {GetUpgradeCost()} €. {DescribeEffects(0, upgradeRizik, upgradeRadnici)}";
+        }
+
+        if (buildingRole == BuildingRole.WorkerContact)
+        {
+            actionText += $"\n- {emergencyActionButtonText}: costs {GetEmergencyActionCost()} €, " +
+                          $"adds {emergencyActionRisk} risk, and gives 1 net extra action.";
+            int cooldownRemaining = GetEmergencyActionCooldownTurnsRemaining();
+            if (cooldownRemaining > 0)
+            {
+                actionText += $" Available again in {cooldownRemaining} turn(s).";
+            }
+            else
+            {
+                actionText += $" The next use will cost {GetEmergencyActionCost() + emergencyActionCostIncrease} €.";
+            }
         }
 
         return actionText;
@@ -593,12 +867,92 @@ public class BuildingInfo : MonoBehaviour
 
         return $"Upgrade: {upgradeLevel}/{maxUpgradeLevel}\n" +
                $"Next upgrade: {GetUpgradeCost()} €\n" +
-               upgradeDescription;
+               GetNextUpgradeDescription();
     }
 
     private int GetUpgradeCost()
     {
+        if (buildingRole == BuildingRole.Factory)
+        {
+            int[] costs = { 700, 1400, 2500 };
+            return costs[Mathf.Clamp(upgradeLevel, 0, costs.Length - 1)];
+        }
+
+        if (buildingRole == BuildingRole.Warehouse)
+        {
+            int[] costs = { 600, 1200, 2200 };
+            return costs[Mathf.Clamp(upgradeLevel, 0, costs.Length - 1)];
+        }
+
+        if (buildingName == "Apartment")
+        {
+            int[] costs = { 800, 1500, 2500 };
+            return costs[Mathf.Clamp(upgradeLevel, 0, costs.Length - 1)];
+        }
+
         return upgradeCost + upgradeCostIncrease * upgradeLevel;
+    }
+
+    private string GetNextUpgradeDescription()
+    {
+        int nextLevel = Mathf.Clamp(upgradeLevel + 1, 1, maxUpgradeLevel);
+
+        if (buildingRole == BuildingRole.Factory)
+        {
+            int[] batchSizes = { 50, 75, 100, 150 };
+            int[] capacities = { 100, 150, 250, 400 };
+            float[] durations = { 30f, 30f, 25f, 20f };
+            return $"Next level: {batchSizes[nextLevel]} g per cycle, " +
+                   $"{capacities[nextLevel]} g capacity, {durations[nextLevel]:0} second cycle.";
+        }
+
+        if (buildingRole == BuildingRole.Warehouse)
+        {
+            int[] capacities = { 100, 200, 350, 550 };
+            return $"Next level: {capacities[nextLevel]} g warehouse capacity.";
+        }
+
+        if (buildingName == "Apartment")
+        {
+            int[] riskReduction = { 20, 30, 40, 50 };
+            return $"Next level: Lay low reduces risk by {riskReduction[nextLevel]}. " +
+                   "Cooldown remains 3 turns.";
+        }
+
+        return upgradeDescription;
+    }
+
+    private void ApplyUpgradeBenefits()
+    {
+        GameResources resources = GameResources.Instance;
+        if (resources == null)
+        {
+            return;
+        }
+
+        if (buildingRole == BuildingRole.Factory)
+        {
+            int[] batchSizes = { 50, 75, 100, 150 };
+            int[] capacities = { 100, 150, 250, 400 };
+            float[] durations = { 30f, 30f, 25f, 20f };
+            int level = Mathf.Clamp(upgradeLevel, 0, 3);
+            goodsPerBatch = batchSizes[level];
+            productionDurationSeconds = durations[level];
+            resources.kapacitetTvornice = Mathf.Max(resources.kapacitetTvornice, capacities[level]);
+        }
+        else if (buildingRole == BuildingRole.Warehouse)
+        {
+            int[] capacities = { 100, 200, 350, 550 };
+            resources.kapacitetSkladista = Mathf.Max(
+                resources.kapacitetSkladista,
+                capacities[Mathf.Clamp(upgradeLevel, 0, 3)]);
+        }
+        else if (buildingName == "Apartment")
+        {
+            int[] riskReduction = { 20, 30, 40, 50 };
+            increaseRizik = -riskReduction[Mathf.Clamp(upgradeLevel, 0, 3)];
+            actionCooldownEvents = Mathf.Max(3, actionCooldownEvents);
+        }
     }
 
     private bool IsActionOnCooldown()

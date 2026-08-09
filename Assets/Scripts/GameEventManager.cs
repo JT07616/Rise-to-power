@@ -311,6 +311,18 @@ public class GameEventManager : MonoBehaviour
         }
     }
 
+    public static void GrantEmergencyAction()
+    {
+        if (instance == null || !IsPlayerTurn || PlayerActionsRemaining <= 0 ||
+            GameResources.Instance == null || GameResources.Instance.gameOver)
+        {
+            return;
+        }
+
+        // The favor pays for the action used to arrange it and leaves one net extra action.
+        PlayerActionsRemaining++;
+    }
+
     void BeginAiTurn()
     {
         if (!IsPlayerTurn)
@@ -578,6 +590,18 @@ public class GameEventManager : MonoBehaviour
 
         if (R.rizik >= 100)
         {
+            if (R.ConsumeRaidBribe())
+            {
+                EnqueueNotification(
+                    "POLICE RAID AVOIDED",
+                    "Your contact buried the report before the raid could begin.\n\n" +
+                    "No money or workers were lost.\nRisk reset to 30."
+                );
+                R.EvaluateGameOver();
+                R.Clamp();
+                return;
+            }
+
             R.policeRaidCount++;
             int seizure = Mathf.Max(0, R.novac * 30 / 100);
             R.novac -= seizure;
@@ -2514,7 +2538,11 @@ public class GameEventManager : MonoBehaviour
             $"Store: {r.robaUSkladistu}/{r.kapacitetSkladista} g" +
                 (r.robaUTransportu > 0 ? $" (+{r.robaUTransportu} g moving)" : ""),
             $"Workers: {r.SlobodniRadnici}/{r.radnici} free",
-            $"Risk: {r.rizik}/100 (Raids {r.policeRaidCount}/{r.maxPoliceRaids})",
+            $"Risk: {r.rizik}" +
+                (DeliveryOrderManager.PendingPlayerRisk > 0
+                    ? $" (+{DeliveryOrderManager.PendingPlayerRisk} pending)"
+                    : "") +
+                $"/100 (Raids {r.policeRaidCount}/{r.maxPoliceRaids})",
             $"Influence: {r.utjecaj}%"
         };
 

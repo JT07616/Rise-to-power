@@ -101,6 +101,43 @@ public class BuildingPopupUI : MonoBehaviour
         float x = panelRect.x + (panelRect.width - totalWidth) / 2f;
         float y = panelRect.yMax - buttonHeight - 18f;
 
+        if (currentBuilding.buildingRole == BuildingRole.CorruptOfficer)
+        {
+            if (!currentBuilding.IsUnlocked())
+            {
+                GUI.enabled = currentBuilding.CanPurchase();
+                if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetPurchaseButtonLabel()))
+                {
+                    PlayButtonClick();
+                    currentBuilding.Purchase();
+                    RefreshText();
+                }
+
+                GUI.enabled = true;
+                return;
+            }
+
+            GUI.enabled = currentBuilding.CanBuyRiskProtection();
+            if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetRiskProtectionButtonLabel()))
+            {
+                PlayButtonClick();
+                currentBuilding.BuyRiskProtection();
+                RefreshText();
+            }
+
+            GUI.enabled = currentBuilding.CanBuyRaidBribe();
+            float raidButtonX = x + buttonWidth + gap;
+            if (GUI.Button(new Rect(raidButtonX, y, buttonWidth, buttonHeight), currentBuilding.GetRaidBribeButtonLabel()))
+            {
+                PlayButtonClick();
+                currentBuilding.BuyRaidBribe();
+                RefreshText();
+            }
+
+            GUI.enabled = true;
+            return;
+        }
+
         if (!currentBuilding.IsUnlocked())
         {
             GUI.enabled = currentBuilding.CanPurchase();
@@ -168,6 +205,19 @@ public class BuildingPopupUI : MonoBehaviour
             buttonIndex++;
         }
 
+        if (currentBuilding.buildingRole == BuildingRole.WorkerContact)
+        {
+            GUI.enabled = currentBuilding.CanBuyEmergencyAction();
+            float buttonX = x + buttonIndex * (buttonWidth + gap);
+            if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetEmergencyActionButtonLabel()))
+            {
+                PlayButtonClick();
+                currentBuilding.BuyEmergencyAction();
+                RefreshText();
+            }
+            buttonIndex++;
+        }
+
         if (currentBuilding.hasUpgrade)
         {
             GUI.enabled = currentBuilding.CanUpgrade();
@@ -185,6 +235,11 @@ public class BuildingPopupUI : MonoBehaviour
 
     private int GetActionButtonCount()
     {
+        if (currentBuilding != null && currentBuilding.buildingRole == BuildingRole.CorruptOfficer)
+        {
+            return currentBuilding.IsUnlocked() ? 2 : 1;
+        }
+
         if (currentBuilding == null || !currentBuilding.IsUnlocked())
         {
             return 1;
@@ -208,6 +263,11 @@ public class BuildingPopupUI : MonoBehaviour
         }
 
         if (currentBuilding.showDecreaseAction)
+        {
+            count++;
+        }
+
+        if (currentBuilding.buildingRole == BuildingRole.WorkerContact)
         {
             count++;
         }
