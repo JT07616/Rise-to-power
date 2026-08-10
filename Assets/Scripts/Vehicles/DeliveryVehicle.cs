@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -13,6 +14,7 @@ public class DeliveryVehicle : MonoBehaviour
     [Min(0.5f)] public float waypointPassRadius = 3f;
 
     private NavMeshAgent agent;
+    private NavMeshObstacle parkedObstacle;
     private DeliveryIndicator indicator;
 
     private Vector3 destination;
@@ -23,10 +25,18 @@ public class DeliveryVehicle : MonoBehaviour
 
     private State state = State.Idle;
     private float waitUntil;
+    private float desiredSpeed;
+
+    // sva ziva vozila, da svako moze provjeriti tko mu je ispred
+    private static readonly List<DeliveryVehicle> activeVehicles = new List<DeliveryVehicle>();
+
+    private void OnEnable() { activeVehicles.Add(this); }
+    private void OnDisable() { activeVehicles.Remove(this); }
 
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        if (TryGetComponent(out parkedObstacle)) parkedObstacle.enabled = false;
         if (!TryGetComponent(out LaneCentering _)) gameObject.AddComponent<LaneCentering>();
         if (!TryGetComponent(out indicator)) indicator = gameObject.AddComponent<DeliveryIndicator>();
     }
@@ -43,6 +53,8 @@ public class DeliveryVehicle : MonoBehaviour
 
         if (!agent.enabled || !agent.isOnNavMesh || agent.pathPending) return;
 
+        KeepDistanceFromCarAhead();
+
         // Kroz medju-waypoint se prolazi u voznji, bez kocenja.
         if (state == State.ToWaypoint)
         {
@@ -57,6 +69,36 @@ public class DeliveryVehicle : MonoBehaviour
 
         if (state == State.ToDestination) Arrive();
         else if (state == State.Returning) Finish();
+    }
+
+    // Ako je drugo vozilo ispred na istoj cesti, koci umjesto da prodje kroz njega.
+    private void KeepDistanceFromCarAhead()
+    {
+        DeliveryVehicle ahead = null;
+
+        foreach (DeliveryVehicle other in activeVehicles)
+        {
+            if (other == this) continue;
+
+            Vector3 toOther = other.transform.position - transform.position;
+            if (toOther.magnitude > 7f) continue;
+            if (Vector3.Dot(transform.forward, toOther.normalized) < 0.8f) continue;
+
+            ahead = other;
+            break;
+        }
+
+        if (ahead == null)
+        {
+            agent.speed = desiredSpeed;
+            return;
+        }
+
+        float aheadSpeed = ahead.agent != null && ahead.agent.enabled
+            ? ahead.agent.velocity.magnitude
+            : 0f;
+
+        agent.speed = Mathf.Min(desiredSpeed, Mathf.Max(0f, aheadSpeed - 0.5f));
     }
 
     public bool BeginJourney(
@@ -88,9 +130,10 @@ public class DeliveryVehicle : MonoBehaviour
         // Brzina prati zadano trajanje puta. Ubrzanje i brzina skretanja rastu s njom,
         // inace brzom autu radijus skretanja postane veci od praga dolaska
         // pa zauvijek kruzi oko cilja.
-        agent.speed = Mathf.Max(0.1f, PathLength(start, destination) / Mathf.Max(0.1f, duration));
-        agent.acceleration = Mathf.Max(8f, agent.speed * 2.5f);
-        agent.angularSpeed = Mathf.Max(300f, agent.speed / Mathf.Max(0.5f, arrivalDistance) * Mathf.Rad2Deg);
+        desiredSpeed = Mathf.Max(0.1f, PathLength(start, destination) / Mathf.Max(0.1f, duration));
+        agent.speed = desiredSpeed;
+        agent.acceleration = Mathf.Max(8f, desiredSpeed * 2.5f);
+        agent.angularSpeed = Mathf.Max(300f, desiredSpeed / Mathf.Max(0.5f, arrivalDistance) * Mathf.Rad2Deg);
         agent.isStopped = false;
 
         // Odmah okreni auto prema cilju da ne radi piruetu na spawnu.
@@ -114,6 +157,13 @@ public class DeliveryVehicle : MonoBehaviour
         indicator.Hide();
         agent.isStopped = true;
 
+        // dok stoji, auto postane prava prepreka pa drugi voze oko njega
+        if (parkedObstacle != null)
+        {
+            agent.enabled = false;
+            parkedObstacle.enabled = true;
+        }
+
         Action callback = onArrival;
         onArrival = null;
         callback?.Invoke();
@@ -131,6 +181,13 @@ public class DeliveryVehicle : MonoBehaviour
     private void StartReturn()
     {
         indicator.Hide();
+
+        if (parkedObstacle != null)
+        {
+            parkedObstacle.enabled = false;
+            agent.enabled = true;
+            if (!agent.isOnNavMesh) agent.Warp(transform.position);
+        }
 
         if (!agent.enabled || !agent.isOnNavMesh || !agent.SetDestination(returnPoint))
         {

@@ -76,7 +76,8 @@ public class LaneCentering : MonoBehaviour
         }
         probe = probeHit.position;
 
-        float probeDistance = expectedLaneWidth * 0.5f + laneWidthTolerance + probeExtraDistance;
+        // domet pokriva i dvosmjernu cestu u jednom komadu (dvije sirine trake)
+        float probeDistance = expectedLaneWidth * 2f + laneWidthTolerance + probeExtraDistance;
         bool hasLeft = NavMesh.Raycast(
             probe, probe - right * probeDistance, out NavMeshHit left, agent.areaMask);
         bool hasRight = NavMesh.Raycast(
@@ -88,15 +89,28 @@ public class LaneCentering : MonoBehaviour
             return;
         }
 
-        // Na raskrizjima i prosirenjima mjera ne valja pa se korekcija gasi.
         float width = Vector3.Distance(left.position, rightEdge.position);
-        if (Mathf.Abs(width - expectedLaneWidth) > laneWidthTolerance)
+        Vector3 laneCenter;
+
+        if (Mathf.Abs(width - expectedLaneWidth) <= laneWidthTolerance)
         {
+            // jedna traka: vozi po njenoj sredini
+            laneCenter = (left.position + rightEdge.position) * 0.5f;
+        }
+        else if (Mathf.Abs(width - expectedLaneWidth * 2f) <= laneWidthTolerance * 2f)
+        {
+            // dupla sirina (dvosmjerna cesta ili cesta s prilazom):
+            // drzi se sredine one polovice u kojoj se auto vec nalazi
+            Vector3 middle = (left.position + rightEdge.position) * 0.5f;
+            float currentSide = Vector3.Dot(agent.nextPosition - middle, right) >= 0f ? 1f : -1f;
+            laneCenter = middle + right * (currentSide * width * 0.25f);
+        }
+        else
+        {
+            // raskrizja i prosirenja: mjera ne valja pa se korekcija gasi
             sideError = 0f;
             return;
         }
-
-        Vector3 laneCenter = (left.position + rightEdge.position) * 0.5f;
         float error = Vector3.Dot(laneCenter - agent.nextPosition, right);
 
         float blend = 1f - Mathf.Exp(-correctionSmoothing * Time.deltaTime);

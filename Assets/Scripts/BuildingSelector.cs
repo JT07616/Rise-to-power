@@ -261,7 +261,9 @@ public class BuildingSelector : MonoBehaviour
     static bool IsLabeledBuilding(BuildingInfo building)
     {
         return building != null &&
-               (building.buildingRole != BuildingRole.General || building.buildingName == "Apartment");
+               (building.buildingRole != BuildingRole.General ||
+                building.buildingName == "Apartment" ||
+                building.buildingName == "Police Station");
     }
 
     static string GetBuildingLabel(BuildingInfo building)
@@ -269,6 +271,11 @@ public class BuildingSelector : MonoBehaviour
         if (building.buildingName == "Apartment")
         {
             return "APARTMENT";
+        }
+
+        if (building.buildingName == "Police Station")
+        {
+            return "POLICE STATION";
         }
 
         switch (building.buildingRole)
