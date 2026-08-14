@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
@@ -12,6 +13,8 @@ public class DeliveryVehicle : MonoBehaviour
     [Min(0.1f)] public float arrivalDistance = 1.5f;
     [Min(0f)] public float stopDuration = 1f;
     [Min(0.5f)] public float waypointPassRadius = 3f;
+    public GameObject ripplePrefab;
+    public Vector3 rippleSpot;
 
     private NavMeshAgent agent;
     private NavMeshObstacle parkedObstacle;
@@ -110,6 +113,8 @@ public class DeliveryVehicle : MonoBehaviour
         Vector3? returnTo = null,
         Vector3? viaWaypoint = null)
     {
+        rippleSpot = to;
+
         // Cilj je cesto zgrada daleko od ceste, pa se trazi navmesh u sirem radijusu.
         Vector3 start = Snap(from);
         destination = Snap(to, 50f);
@@ -154,6 +159,9 @@ public class DeliveryVehicle : MonoBehaviour
 
     private void Arrive()
     {
+        if (ripplePrefab != null && GetComponentInChildren<PoliceBeacon>() == null)
+            StartCoroutine(SpawnRipples());
+
         indicator.Hide();
         agent.isStopped = true;
 
@@ -219,6 +227,15 @@ public class DeliveryVehicle : MonoBehaviour
         onArrival = null;
         callback?.Invoke();
         Finish();
+    }
+
+    IEnumerator SpawnRipples()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            Instantiate(ripplePrefab, rippleSpot + Vector3.up * 0.5f, ripplePrefab.transform.rotation);
+            yield return new WaitForSeconds(0.25f);
+        }
     }
 
     // Najbliza tocka na navmeshu, ili original ako nista nije blizu.

@@ -17,6 +17,8 @@ public class DeliveryVehicleManager : MonoBehaviour
     [Min(0.5f)]
     public float navMeshSearchDistance = 50f;
 
+    public Transform transferRippleSpot;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -96,7 +98,12 @@ public class DeliveryVehicleManager : MonoBehaviour
 
         DeliveryVehicle vehicle = Instantiate(prefab, hit.position, Quaternion.identity);
         if (vehicle.BeginJourney(hit.position, destination, duration, onArrival, onReturned, returnPoint, waypoint))
+        {
+            if (prefab == goodsTransferVehiclePrefab && transferRippleSpot != null)
+                vehicle.rippleSpot = transferRippleSpot.position;
+
             return true;
+        }
 
         Destroy(vehicle.gameObject);
         return false;

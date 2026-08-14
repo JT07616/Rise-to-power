@@ -131,6 +131,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DeliveryVehicle
   arrivalDistance: 1.5
   stopDuration: 1
+  waypointPassRadius: 3
+  ripplePrefab: {fileID: 7287730544282847130, guid: b8445d1536560c646af075112a36871f, type: 3}
 --- !u!114 &8683067530243850051
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -143,9 +145,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 13fb19529696802428df34f4c0633f5e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DeliveryIndicator
-  spriteResourcePath: Factory/delivery-warehouse
-  height: 6
-  iconSize: 0.35
   bobHeight: 0.6
   bobSpeed: 3
   pulseAmount: 0.05

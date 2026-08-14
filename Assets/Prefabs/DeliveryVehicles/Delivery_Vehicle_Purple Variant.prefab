@@ -64,6 +64,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1813091943540253169, guid: 288b117258616aa4f928ba6f91dc47c3, type: 3}
+      propertyPath: ripplePrefab
+      value: 
+      objectReference: {fileID: 7287730544282847130, guid: b8445d1536560c646af075112a36871f, type: 3}
     - target: {fileID: 5941702660697883397, guid: 288b117258616aa4f928ba6f91dc47c3, type: 3}
       propertyPath: m_Speed
       value: 5
