@@ -999,4 +999,15 @@ public class BuildingInfo : MonoBehaviour
             }
         }
     }
+
+    public void RefreshRenderers()
+    {
+        renderers = GetComponentsInChildren<Renderer>();
+        originalColors = new Color[renderers.Length];
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            originalColors[i] = renderers[i].material.color;
+        }
+    }
 }
