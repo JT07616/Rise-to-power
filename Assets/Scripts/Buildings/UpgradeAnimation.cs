@@ -7,6 +7,7 @@ public class UpgradeAnimation : MonoBehaviour
     public GameObject level3Props;
     public Material[] levelMaterials;
     public Renderer[] copies;
+    public Material[] copyMaterials;
     public Transform dustGroup;
     public float dustDuration = 1.5f;
     public float dustSpread = 2f;
@@ -82,15 +83,16 @@ public class UpgradeAnimation : MonoBehaviour
         if (level2Props != null) level2Props.SetActive(lastLevel >= 2);
         if (level3Props != null) level3Props.SetActive(lastLevel >= 3);
 
-        if (lastLevel < levelMaterials.Length && levelMaterials[lastLevel] != null)
+        if (lastLevel < levelMaterials.Length && levelMaterials[lastLevel] != null && rend != null)
         {
-            Material levelMaterial = levelMaterials[lastLevel];
+            rend.material = levelMaterials[lastLevel];
+        }
 
-            if (rend != null) rend.material = levelMaterial;
-
+        if (lastLevel < copyMaterials.Length && copyMaterials[lastLevel] != null)
+        {
             foreach (Renderer copy in copies)
             {
-                if (copy != null) copy.material = levelMaterial;
+                if (copy != null) copy.material = copyMaterials[lastLevel];
             }
         }
 
