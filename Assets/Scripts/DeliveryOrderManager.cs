@@ -649,6 +649,18 @@ public class DeliveryOrderManager : MonoBehaviour
             return;
         }
 
+        if (AmbushTrapManager.TryTriggerAmbush(TerritoryOwner.Player, order.grams, order.reward))
+        {
+            order.inProgress = false;
+            order.completed = true;
+            pendingPlayerDeliveries.Remove(order);
+            if (order.target != null)
+            {
+                order.target.Deactivate();
+            }
+            return;
+        }
+
         order.inProgress = false;
         order.completed = true;
         pendingPlayerDeliveries.Remove(order);
@@ -690,6 +702,19 @@ public class DeliveryOrderManager : MonoBehaviour
             DeliveryOrder order = activeDeliveries[i];
             if (Time.time < order.finishTime)
             {
+                continue;
+            }
+
+            if (AmbushTrapManager.TryTriggerAmbush(TerritoryOwner.Player, order.grams, order.reward))
+            {
+                order.inProgress = false;
+                order.completed = true;
+                pendingPlayerDeliveries.Remove(order);
+                if (order.target != null)
+                {
+                    order.target.Deactivate();
+                }
+                activeDeliveries.RemoveAt(i);
                 continue;
             }
 
@@ -740,6 +765,13 @@ public class DeliveryOrderManager : MonoBehaviour
     {
         if (delivery == null || delivery.completed)
         {
+            return;
+        }
+
+        if (AmbushTrapManager.TryTriggerAmbush(TerritoryOwner.AI, delivery.grams, delivery.reward))
+        {
+            delivery.completed = true;
+            activeAiDeliveries.Remove(delivery);
             return;
         }
 

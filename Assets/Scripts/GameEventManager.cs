@@ -151,6 +151,11 @@ public class GameEventManager : MonoBehaviour
             gameObject.AddComponent<DeliveryOrderManager>();
         }
 
+        if (GetComponent<AmbushTrapManager>() == null)
+        {
+            gameObject.AddComponent<AmbushTrapManager>();
+        }
+
         SetupMiniMap();
 
         if (CharacterSelect.playerCharacter == "Male")
@@ -449,6 +454,11 @@ public class GameEventManager : MonoBehaviour
             availableActions.Add(() => DeliveryOrderManager.TryStartRandomAiDelivery());
         }
 
+        if (AmbushTrapManager.CanRivalSetAmbush())
+        {
+            availableActions.Add(() => AmbushTrapManager.TrySetRivalAmbush());
+        }
+
         if (availableActions.Count == 0)
         {
             ReportAiActivity("No valid action was available; rival waited.");
@@ -512,6 +522,14 @@ public class GameEventManager : MonoBehaviour
             instance.aiActivityLog.RemoveAt(0);
         }
         Debug.Log($"AI: {message}");
+    }
+
+    public static void NotifyPlayer(string title, string body)
+    {
+        if (instance != null)
+        {
+            instance.EnqueueNotification(title, body);
+        }
     }
 
     IEnumerator BeginPlayerTurn()

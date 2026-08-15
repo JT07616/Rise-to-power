@@ -345,6 +345,23 @@ public class OpponentResources : IActionResources
         return true;
     }
 
+    public bool TryReserveWorker()
+    {
+        ReleaseFinishedWorkers();
+        if (FreeWorkers <= 0)
+        {
+            return false;
+        }
+
+        busyWorkersUntil.Add(float.PositiveInfinity);
+        return true;
+    }
+
+    public void ReleaseReservedWorker()
+    {
+        busyWorkersUntil.Remove(float.PositiveInfinity);
+    }
+
     public void ReleaseFinishedWorkers()
     {
         busyWorkersUntil.RemoveAll(time => time <= Time.time);
@@ -614,6 +631,23 @@ public class GameResources : MonoBehaviour, IActionResources
         }
 
         return true;
+    }
+
+    public bool TryReserveWorker()
+    {
+        ReleaseFinishedWorkers();
+        if (SlobodniRadnici <= 0)
+        {
+            return false;
+        }
+
+        radniciZauzetiDoVremena.Add(float.PositiveInfinity);
+        return true;
+    }
+
+    public void ReleaseReservedWorker()
+    {
+        radniciZauzetiDoVremena.Remove(float.PositiveInfinity);
     }
 
     public bool TryStartFactoryTransfer(float durationSeconds)
