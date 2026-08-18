@@ -228,7 +228,10 @@ public class BuildingInfo : MonoBehaviour
             return;
         }
 
-        SharedActionRules.CompleteProduction(GameResources.Instance, goodsPerBatch);
+        SharedActionRules.CompleteProduction(
+            GameResources.Instance,
+            goodsPerBatch,
+            productionWorkersRequired);
         Debug.Log($"{buildingName}: production finished, +{goodsPerBatch} g.");
         productionFinishTime = -1f;
     }
@@ -677,7 +680,7 @@ public class BuildingInfo : MonoBehaviour
         string stock = resources == null ? "" :
             $" Factory stock: {resources.robaUTvornici}/{resources.kapacitetTvornice} g.";
         string workerPay = resources == null ? "" :
-            $" Worker pay: {SharedActionRules.GetProductionWorkerCost(resources, goodsPerBatch)} €.";
+            $" Production bonus: {SharedActionRules.GetProductionWorkerCost(resources, productionWorkersRequired)} €.";
         return $"Production: {goodsPerBatch} g in {productionDurationSeconds:0} seconds, " +
                $"requires {productionWorkersRequired} free worker(s).{workerPay}{stock}";
     }

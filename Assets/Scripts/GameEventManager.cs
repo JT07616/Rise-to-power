@@ -46,6 +46,10 @@ public class GameEventManager : MonoBehaviour
     [Tooltip("Seconds between consecutive events.")]
     public float delayBetweenEvents = 30f;
 
+    [Header("Risk")]
+    [Min(0)] public int dailyRiskReduction = 5;
+    [Min(0)] public int idleDeliveryRiskReduction = 5;
+
     [Header("Style")]
     public int barHeight = 40;
     public int popupWidth = 640;
@@ -91,6 +95,7 @@ public class GameEventManager : MonoBehaviour
     private float miniMapParcelArea;
     private bool playerTurnAnnouncementActive;
     private int playerTurnCountdown;
+    private bool playerStartedDeliveryToday;
     private readonly List<string> aiActivityLog = new List<string>();
 
     private class MiniMapParcel
@@ -154,6 +159,11 @@ public class GameEventManager : MonoBehaviour
         if (GetComponent<AmbushTrapManager>() == null)
         {
             gameObject.AddComponent<AmbushTrapManager>();
+        }
+
+        if (GetComponent<TerritoryDistrictManager>() == null)
+        {
+            gameObject.AddComponent<TerritoryDistrictManager>();
         }
 
         SetupMiniMap();
@@ -328,6 +338,14 @@ public class GameEventManager : MonoBehaviour
         PlayerActionsRemaining++;
     }
 
+    public static void ReportPlayerDeliveryStarted()
+    {
+        if (instance != null)
+        {
+            instance.playerStartedDeliveryToday = true;
+        }
+    }
+
     void BeginAiTurn()
     {
         if (!IsPlayerTurn)
@@ -459,6 +477,11 @@ public class GameEventManager : MonoBehaviour
             availableActions.Add(() => AmbushTrapManager.TrySetRivalAmbush());
         }
 
+        if (AmbushTrapManager.CanRivalSetAmbush())
+        {
+            availableActions.Add(() => AmbushTrapManager.TrySetRivalAmbush());
+        }
+
         if (availableActions.Count == 0)
         {
             ReportAiActivity("No valid action was available; rival waited.");
@@ -522,6 +545,14 @@ public class GameEventManager : MonoBehaviour
             instance.aiActivityLog.RemoveAt(0);
         }
         Debug.Log($"AI: {message}");
+    }
+
+    public static void NotifyPlayer(string title, string body)
+    {
+        if (instance != null)
+        {
+            instance.EnqueueNotification(title, body);
+        }
     }
 
     public static void NotifyPlayer(string title, string body)
@@ -605,6 +636,19 @@ public class GameEventManager : MonoBehaviour
     {
         var R = GameResources.Instance;
         if (R == null || R.chapterEnded || R.gameOver) return;
+
+        int playerWagesPaid = R.PayDailyWorkerWages(out int playerWorkersWhoLeft);
+        R.Opponent.PayDailyWorkerWages(out _);
+        int riskReduction = dailyRiskReduction +
+                            (playerStartedDeliveryToday ? 0 : idleDeliveryRiskReduction);
+        R.rizik = Mathf.Max(0, R.rizik - riskReduction);
+        playerStartedDeliveryToday = false;
+        if (playerWorkersWhoLeft > 0)
+        {
+            EnqueueNotification(
+                "UNPAID WAGES",
+                $"You paid {playerWagesPaid} € in daily wages. {playerWorkersWhoLeft} worker(s) left because the rest could not be paid.");
+        }
 
         if (R.rizik >= 100)
         {
@@ -2319,6 +2363,12 @@ public class GameEventManager : MonoBehaviour
             }
 
             accumulatedArea += parcel.area;
+        }
+
+        TerritoryDistrictManager districtManager = GetComponent<TerritoryDistrictManager>();
+        if (districtManager != null)
+        {
+            districtManager.InitializeDistricts();
         }
     }
 

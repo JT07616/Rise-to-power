@@ -533,9 +533,9 @@ public class DeliveryOrderManager : MonoBehaviour
         GUILayout.Label($"Market demand: {GetDemandName(order.marketMultiplier)}");
         GUILayout.Label(GetTerritoryTerms(order.territoryOwner));
         GUILayout.Label($"Police risk: +{order.risk}");
-        int workerCost = SharedActionRules.GetDeliveryWorkerCost(resources, order.grams);
-        GUILayout.Label($"Worker pay: -{workerCost} €");
-        GUILayout.Label($"Net profit: +{Mathf.Max(0, order.reward - workerCost)} €");
+        int workerCommission = SharedActionRules.GetDeliveryWorkerCommission(resources, order.reward);
+        GUILayout.Label($"Courier commission: -{workerCommission} € (on success)");
+        GUILayout.Label($"Net profit: +{Mathf.Max(0, order.reward - workerCommission)} €");
         GUILayout.Label($"Distance from factory: {order.distance:0} m");
         GUILayout.Label($"Estimated delivery time: {order.duration:0} seconds");
 
@@ -613,6 +613,7 @@ public class DeliveryOrderManager : MonoBehaviour
 
         order.inProgress = true;
         pendingPlayerDeliveries.Add(order);
+        GameEventManager.ReportPlayerDeliveryStarted();
 
         Vector3 startPosition = GetVehicleStartPosition();
         Vector3 destinationPosition = order.target != null

@@ -327349,7 +327349,9 @@ MonoBehaviour:
   rizik: 10
   utjecaj: 30
   radnici: 1
-  placaRadnikaPoZadatku: 15
+  placaRadnikaPoZadatku: 5
+  provizijaDostavljacaPostotak: 20
+  proizvodniBonusPoRadniku: 10
   radniciZauzetiDoVremena: []
   opponentResources:
     money: 0

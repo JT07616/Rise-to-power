@@ -13,6 +13,8 @@ public class DeliveryVehicle : MonoBehaviour
     [Min(0.1f)] public float arrivalDistance = 1.5f;
     [Min(0f)] public float stopDuration = 1f;
     [Min(0.5f)] public float waypointPassRadius = 3f;
+    [Min(1f)] public float journeyTimeoutMultiplier = 3f;
+    [Min(1f)] public float minimumJourneyTimeout = 15f;
     public GameObject ripplePrefab;
     public Vector3 rippleSpot;
 
@@ -29,6 +31,7 @@ public class DeliveryVehicle : MonoBehaviour
     private State state = State.Idle;
     private float waitUntil;
     private float desiredSpeed;
+    private float arrivalDeadline;
 
     // sva ziva vozila, da svako moze provjeriti tko mu je ispred
     private static readonly List<DeliveryVehicle> activeVehicles = new List<DeliveryVehicle>();
@@ -47,6 +50,13 @@ public class DeliveryVehicle : MonoBehaviour
     private void Update()
     {
         if (state == State.Idle) return;
+
+        if (state != State.Returning && Time.time >= arrivalDeadline)
+        {
+            Debug.LogWarning("Delivery vehicle timed out before reaching its destination; completing the journey without the vehicle.");
+            Fail();
+            return;
+        }
 
         if (state == State.Waiting)
         {
@@ -122,6 +132,9 @@ public class DeliveryVehicle : MonoBehaviour
 
         onArrival = arrived;
         onFinished = finished;
+        arrivalDeadline = Time.time + Mathf.Max(
+            minimumJourneyTimeout,
+            duration * journeyTimeoutMultiplier);
 
         agent.enabled = true;
         if (!agent.Warp(start))

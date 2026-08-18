@@ -13,6 +13,8 @@ public interface IActionResources
     int Influence { get; set; }
     int Workers { get; set; }
     int WorkerPayPerAction { get; }
+    int DeliveryCommissionPercent { get; }
+    int ProductionBonusPerWorker { get; }
     int FreeWorkers { get; }
 
     bool CanAfford(int amount);
@@ -63,7 +65,6 @@ public static class SharedActionRules
         int workersRequired)
     {
         return resources != null && goodsPerBatch > 0 && workersRequired > 0 &&
-               resources.CanAfford(GetProductionWorkerCost(resources, goodsPerBatch)) &&
                resources.FactoryGoods + goodsPerBatch <= resources.FactoryCapacity &&
                resources.FreeWorkers >= workersRequired;
     }
@@ -74,9 +75,7 @@ public static class SharedActionRules
         int workersRequired,
         float durationSeconds)
     {
-        int workerCost = GetProductionWorkerCost(resources, goodsPerBatch);
-        if (!CanStartProduction(resources, goodsPerBatch, workersRequired) ||
-            !resources.TrySpendMoney(workerCost))
+        if (!CanStartProduction(resources, goodsPerBatch, workersRequired))
         {
             return false;
         }
@@ -86,14 +85,13 @@ public static class SharedActionRules
             return true;
         }
 
-        resources.Money += workerCost;
         return false;
     }
 
-    public static int GetProductionWorkerCost(IActionResources resources, int goods)
+    public static int GetProductionWorkerCost(IActionResources resources, int workersRequired = 1)
     {
-        int basePay = resources != null ? resources.WorkerPayPerAction : 15;
-        return Mathf.Max(basePay, 25 + Mathf.CeilToInt(Mathf.Max(0, goods) / 4f));
+        int bonusPerWorker = resources != null ? resources.ProductionBonusPerWorker : 10;
+        return Mathf.Max(1, workersRequired) * bonusPerWorker;
     }
 
     public static bool CanStartTransfer(IActionResources resources)
@@ -127,7 +125,6 @@ public static class SharedActionRules
     {
         return resources != null && goods > 0 &&
                resources.WarehouseGoods >= goods &&
-               resources.CanAfford(GetDeliveryWorkerCost(resources, goods)) &&
                resources.FreeWorkers > 0;
     }
 
@@ -136,16 +133,13 @@ public static class SharedActionRules
         int goods,
         float durationSeconds)
     {
-        int workerCost = GetDeliveryWorkerCost(resources, goods);
-        if (!CanStartDelivery(resources, goods) ||
-            !resources.TrySpendMoney(workerCost))
+        if (!CanStartDelivery(resources, goods))
         {
             return false;
         }
 
         if (!resources.TryConsumeWarehouseGoods(goods))
         {
-            resources.Money += workerCost;
             return false;
         }
 
@@ -155,17 +149,16 @@ public static class SharedActionRules
         }
 
         resources.WarehouseGoods += goods;
-        resources.Money += workerCost;
         return false;
     }
 
-    public static int GetDeliveryWorkerCost(IActionResources resources, int goods)
+    public static int GetDeliveryWorkerCommission(IActionResources resources, int reward)
     {
-        int basePay = resources != null ? resources.WorkerPayPerAction : 15;
-        return Mathf.Max(basePay, 25 + Mathf.CeilToInt(Mathf.Max(0, goods) / 2f));
+        int commissionPercent = resources != null ? resources.DeliveryCommissionPercent : 20;
+        return Mathf.Max(0, Mathf.CeilToInt(Mathf.Max(0, reward) * commissionPercent / 100f));
     }
 
-    public static void CompleteProduction(IActionResources resources, int goods)
+    public static void CompleteProduction(IActionResources resources, int goods, int workersRequired = 1)
     {
         if (resources == null || goods <= 0)
         {
@@ -175,6 +168,34 @@ public static class SharedActionRules
         resources.FactoryGoods = Mathf.Min(
             resources.FactoryCapacity,
             resources.FactoryGoods + goods);
+        int productionBonus = GetProductionWorkerCost(resources, workersRequired);
+        resources.Money -= Mathf.Min(Mathf.Max(0, resources.Money), productionBonus);
+        resources.Clamp();
+    }
+
+    public static int PayDailyWorkerWages(IActionResources resources, out int workersWhoLeft)
+    {
+        workersWhoLeft = 0;
+        if (resources == null || resources.Workers <= 0 || resources.WorkerPayPerAction <= 0)
+        {
+            return 0;
+        }
+
+        int due = resources.Workers * resources.WorkerPayPerAction;
+        int paid = Mathf.Min(Mathf.Max(0, resources.Money), due);
+        resources.Money -= paid;
+
+        int unpaid = due - paid;
+        if (unpaid > 0)
+        {
+            workersWhoLeft = Mathf.Min(
+                resources.FreeWorkers,
+                Mathf.CeilToInt(unpaid / (float)resources.WorkerPayPerAction));
+            resources.Workers -= workersWhoLeft;
+        }
+
+        resources.Clamp();
+        return paid;
     }
 
     public static void CompleteTransfer(IActionResources resources)
@@ -201,7 +222,7 @@ public static class SharedActionRules
             return;
         }
 
-        resources.Money += reward;
+        resources.Money += reward - GetDeliveryWorkerCommission(resources, reward);
         resources.Risk += risk;
         resources.Influence += influence;
         resources.Clamp();
@@ -221,6 +242,8 @@ public class OpponentResources : IActionResources
     [Range(0, 100)] public int influence;
     public int workers;
     [Min(0)] public int workerPayPerAction;
+    [Min(0)] public int deliveryCommissionPercent = 20;
+    [Min(0)] public int productionBonusPerWorker = 10;
 
     public int factoryUpgradeLevel;
     public int warehouseUpgradeLevel;
@@ -267,6 +290,8 @@ public class OpponentResources : IActionResources
     public int Influence { get { return influence; } set { influence = value; } }
     public int Workers { get { return workers; } set { workers = value; } }
     public int WorkerPayPerAction { get { return workerPayPerAction; } }
+    public int DeliveryCommissionPercent { get { return deliveryCommissionPercent; } }
+    public int ProductionBonusPerWorker { get { return productionBonusPerWorker; } }
 
     public void InitializeFromPlayer(GameResources player)
     {
@@ -280,6 +305,8 @@ public class OpponentResources : IActionResources
         influence = player.utjecaj;
         workers = player.radnici;
         workerPayPerAction = player.placaRadnikaPoZadatku;
+        deliveryCommissionPercent = player.provizijaDostavljacaPostotak;
+        productionBonusPerWorker = player.proizvodniBonusPoRadniku;
         factoryUpgradeLevel = 0;
         warehouseUpgradeLevel = 0;
         workerContactUpgradeLevel = 0;
@@ -403,6 +430,11 @@ public class OpponentResources : IActionResources
         }
     }
 
+    public int PayDailyWorkerWages(out int workersWhoLeft)
+    {
+        return SharedActionRules.PayDailyWorkerWages(this, out workersWhoLeft);
+    }
+
     public void Clamp()
     {
         factoryCapacity = Mathf.Max(1, factoryCapacity);
@@ -433,7 +465,10 @@ public class GameResources : MonoBehaviour, IActionResources
     public int radnici = 1;
 
     [Header("Radnici")]
-    [Min(0)] public int placaRadnikaPoZadatku = 15;
+    [Tooltip("Daily base wage paid for every worker.")]
+    [Min(0)] public int placaRadnikaPoZadatku = 5;
+    [Range(0, 100)] public int provizijaDostavljacaPostotak = 20;
+    [Min(0)] public int proizvodniBonusPoRadniku = 10;
     [SerializeField] private List<float> radniciZauzetiDoVremena = new List<float>();
 
     [Header("AI Resources")]
@@ -488,6 +523,8 @@ public class GameResources : MonoBehaviour, IActionResources
     public int Influence { get { return utjecaj; } set { utjecaj = value; } }
     public int Workers { get { return radnici; } set { radnici = value; } }
     public int WorkerPayPerAction { get { return placaRadnikaPoZadatku; } }
+    public int DeliveryCommissionPercent { get { return provizijaDostavljacaPostotak; } }
+    public int ProductionBonusPerWorker { get { return proizvodniBonusPoRadniku; } }
     public int FreeWorkers { get { return SlobodniRadnici; } }
 
     [Header("Police")]
@@ -664,6 +701,11 @@ public class GameResources : MonoBehaviour, IActionResources
     public void ReleaseFinishedWorkers()
     {
         radniciZauzetiDoVremena.RemoveAll(time => time <= Time.time);
+    }
+
+    public int PayDailyWorkerWages(out int workersWhoLeft)
+    {
+        return SharedActionRules.PayDailyWorkerWages(this, out workersWhoLeft);
     }
 
     public void AddInfluence(int amount)

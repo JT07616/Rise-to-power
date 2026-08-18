@@ -23,6 +23,14 @@ public class DeliveryOrderTarget : MonoBehaviour
         get
         {
             TerritoryHouse house = GetTerritoryHouse(false);
+            if (TerritoryDistrictManager.TryGetProgress(
+                    house,
+                    TerritoryOwner.Player,
+                    out int progress,
+                    out _))
+            {
+                return progress;
+            }
             return house != null ? house.GetCaptureProgress(TerritoryOwner.Player) : 0;
         }
     }
@@ -32,6 +40,14 @@ public class DeliveryOrderTarget : MonoBehaviour
         get
         {
             TerritoryHouse house = GetTerritoryHouse(false);
+            if (TerritoryDistrictManager.TryGetProgress(
+                    house,
+                    TerritoryOwner.Player,
+                    out _,
+                    out int requirement))
+            {
+                return requirement;
+            }
             return house != null ? house.GetCaptureRequirement(TerritoryOwner.Player) : 6;
         }
     }
@@ -257,11 +273,23 @@ public class TerritoryHouse : MonoBehaviour
         }
     }
 
+    public void SetOwner(TerritoryOwner newOwner)
+    {
+        owner = newOwner;
+        playerCaptureProgress = 0;
+        aiCaptureProgress = 0;
+    }
+
     public bool RegisterDelivery(TerritoryOwner side, int capturePoints = 1)
     {
         if (side == TerritoryOwner.Neutral)
         {
             return false;
+        }
+
+        if (TerritoryDistrictManager.TryRegisterDelivery(this, side, out bool districtCaptured))
+        {
+            return districtCaptured;
         }
 
         if (owner == side)
