@@ -214,8 +214,7 @@ public static class SharedActionRules
     public static void CompleteDelivery(
         IActionResources resources,
         int reward,
-        int risk,
-        int influence)
+        int risk)
     {
         if (resources == null)
         {
@@ -224,7 +223,6 @@ public static class SharedActionRules
 
         resources.Money += reward - GetDeliveryWorkerCommission(resources, reward);
         resources.Risk += risk;
-        resources.Influence += influence;
         resources.Clamp();
     }
 }
@@ -419,14 +417,14 @@ public class OpponentResources : IActionResources
             SharedActionRules.CompleteProduction(this, pendingProductionGoods);
             productionFinishTime = -1f;
             pendingProductionGoods = 0;
-            GameEventManager.ReportAiActivity("Production completed.");
+            GameEventManager.ReportAiActivity("Production completed.", "📦");
         }
 
         if (IsTransferring && Time.time >= transferFinishTime)
         {
             SharedActionRules.CompleteTransfer(this);
             transferFinishTime = -1f;
-            GameEventManager.ReportAiActivity("Goods arrived at the warehouse.");
+            GameEventManager.ReportAiActivity("Goods arrived at the warehouse.", "📦");
         }
     }
 
@@ -518,6 +516,7 @@ public class GameResources : MonoBehaviour, IActionResources
             }
 
             rizik = value;
+            GameStoryManager.ReportRiskChanged(rizik);
         }
     }
     public int Influence { get { return utjecaj; } set { utjecaj = value; } }
@@ -582,6 +581,7 @@ public class GameResources : MonoBehaviour, IActionResources
         {
             SharedActionRules.CompleteTransfer(this);
             zavrsetakTransporta = -1f;
+            GameEventManager.ReportPlayerActivity("📦", "Factory goods arrived at the warehouse.");
             Debug.Log("Goods transfer to the warehouse completed.");
         }
     }

@@ -109,6 +109,12 @@ public class BuildingInfo : MonoBehaviour
     private int lastEmergencyActionDay = -1000;
     private int emergencyActionsPurchased;
     private float productionFinishTime = -1f;
+    private bool storyLocked;
+
+    public bool IsStoryLocked
+    {
+        get { return storyLocked; }
+    }
 
     public bool IsProducingGoods
     {
@@ -232,6 +238,7 @@ public class BuildingInfo : MonoBehaviour
             GameResources.Instance,
             goodsPerBatch,
             productionWorkersRequired);
+        GameEventManager.ReportPlayerActivity("📦", $"{buildingName} completed {goodsPerBatch} g of production.");
         Debug.Log($"{buildingName}: production finished, +{goodsPerBatch} g.");
         productionFinishTime = -1f;
     }
@@ -259,6 +266,14 @@ public class BuildingInfo : MonoBehaviour
 
     public string GetFullDescription()
     {
+        if (buildingName == "Police Station")
+        {
+            return description + "\n\n" +
+                   "A contact near dispatch can identify Volkov's delivery routes. " +
+                   "Assign one worker to intercept the next suitable convoy.\n\n" +
+                   AmbushTrapManager.GetPlayerAmbushStatus();
+        }
+
         if (buildingRole == BuildingRole.CorruptOfficer)
         {
             return GetCorruptOfficerDescription();
@@ -378,6 +393,7 @@ public class BuildingInfo : MonoBehaviour
 
         emergencyActionsPurchased++;
         lastEmergencyActionDay = GameEventManager.CurrentDay;
+        GameEventManager.ReportPlayerActivity("🤝", $"Bought an emergency favor from {buildingName} for {cost}.");
         GameEventManager.GrantEmergencyAction();
         Debug.Log($"Emergency favor bought for {cost} €. Next favor costs {GetEmergencyActionCost()} €.");
     }
@@ -406,6 +422,8 @@ public class BuildingInfo : MonoBehaviour
 
         resources.ActivateRiskProtection(riskProtectionTurns);
         lastOfficerActionDay = GameEventManager.CurrentDay;
+        GameStoryManager.ReportOfficerPaid();
+        GameEventManager.ReportPlayerActivity("🛡️", $"Bought police protection for {riskProtectionTurns} turns.");
         GameEventManager.CompletePlayerAction();
         Debug.Log($"Police protection active for {riskProtectionTurns} turns.");
     }
@@ -434,18 +452,20 @@ public class BuildingInfo : MonoBehaviour
 
         resources.PrepareRaidBribe();
         lastOfficerActionDay = GameEventManager.CurrentDay;
+        GameStoryManager.ReportOfficerPaid();
+        GameEventManager.ReportPlayerActivity("💵", "Bribed Cross to cancel the next police raid.");
         GameEventManager.CompletePlayerAction();
         Debug.Log("The next police raid will be skipped and will leave risk at 30.");
     }
 
     public bool IsUnlocked()
     {
-        return !requiresPurchase || isPurchased;
+        return !storyLocked && (!requiresPurchase || isPurchased);
     }
 
     public bool CanPurchase()
     {
-        return hasProductionControls && requiresPurchase && !isPurchased &&
+        return !storyLocked && hasProductionControls && requiresPurchase && !isPurchased &&
                GameEventManager.CanPlayerAct && GameResources.Instance != null &&
                GameResources.Instance.novac >= purchaseCost;
     }
@@ -462,6 +482,8 @@ public class BuildingInfo : MonoBehaviour
             return;
         }
         isPurchased = true;
+        GameStoryManager.ReportBuildingPurchased(this);
+        GameEventManager.ReportPlayerActivity("🔑", $"Purchased {buildingName} for {purchaseCost}.");
         GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: location bought for {purchaseCost} €.");
     }
@@ -501,6 +523,7 @@ public class BuildingInfo : MonoBehaviour
             return;
         }
         productionFinishTime = Time.time + productionDurationSeconds;
+        GameEventManager.ReportPlayerActivity("🏭", $"Started producing {goodsPerBatch} g at {buildingName}.");
         GameEventManager.CompletePlayerAction();
         Debug.Log($"{buildingName}: production started; {goodsPerBatch} g ready in {productionDurationSeconds:0} seconds.");
     }
@@ -567,6 +590,7 @@ public class BuildingInfo : MonoBehaviour
             );
         }
 
+        GameEventManager.ReportPlayerActivity("🚚", $"Moving factory goods to the warehouse ({duration:0}s).");
         GameEventManager.CompletePlayerAction();
         Debug.Log($"Goods transfer started. Travel time: {duration:0} seconds.");
     }
@@ -586,6 +610,7 @@ public class BuildingInfo : MonoBehaviour
 
         upgradeLevel++;
         ApplyUpgradeBenefits();
+        GameEventManager.ReportPlayerActivity("⬆️", $"Upgraded {buildingName} to level {upgradeLevel} for {cost}.");
         GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: upgraded to level {upgradeLevel}/{maxUpgradeLevel} for {cost} €.");
     }
@@ -632,6 +657,7 @@ public class BuildingInfo : MonoBehaviour
         }
 
         lastActionDay = GameEventManager.CurrentDay;
+        GameEventManager.ReportPlayerActivity("📈", $"{buildingName}: {increaseButtonText}.");
         GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: {increaseButtonText}.");
     }
@@ -654,6 +680,7 @@ public class BuildingInfo : MonoBehaviour
         }
 
         lastActionDay = GameEventManager.CurrentDay;
+        GameEventManager.ReportPlayerActivity("📉", $"{buildingName}: {decreaseButtonText}.");
         GameEventManager.CompletePlayerAction();
         Debug.Log($"🏢 {buildingName}: {decreaseButtonText}.");
     }
@@ -990,6 +1017,11 @@ public class BuildingInfo : MonoBehaviour
 
         int daysPassed = GameEventManager.CurrentDay - lastActionDay;
         return Mathf.Max(0, actionCooldownEvents - daysPassed);
+    }
+
+    public void SetStoryLocked(bool locked)
+    {
+        storyLocked = locked;
     }
 
     private void SetColor(Color color)

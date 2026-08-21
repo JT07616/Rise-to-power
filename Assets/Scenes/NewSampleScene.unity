@@ -327303,8 +327303,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameEventManager
   actionsPerSide: 3
-  playerTurnDuration: 45
-  aiTurnDuration: 45
+  playerTurnDuration: 48
+  aiTurnDuration: 48
   aiActionDelay: 0.6
   firstEventDelay: 0
   delayBetweenEvents: 30

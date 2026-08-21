@@ -7,6 +7,8 @@ using UnityEngine.SceneManagement;
 
 public class GameEventManager : MonoBehaviour
 {
+    private const int VictoryTerritoryPercent = 90;
+
     public static bool IsPopupOpen { get; private set; }
     public static bool IsPauseMenuOpen { get; private set; }
     public static int EventsCompleted { get; private set; }
@@ -35,8 +37,8 @@ public class GameEventManager : MonoBehaviour
 
     [Header("Turn system")]
     [Min(1)] public int actionsPerSide = 3;
-    [Min(1f)] public float playerTurnDuration = 45f;
-    [Min(1f)] public float aiTurnDuration = 45f;
+    [Min(1f)] public float playerTurnDuration = 48f;
+    [Min(1f)] public float aiTurnDuration = 48f;
     [Min(0f)] public float aiActionDelay = 0.6f;
 
     [Header("Timing")]
@@ -84,9 +86,12 @@ public class GameEventManager : MonoBehaviour
     private GameEvent currentEvent;
     private bool isNotification;
     private Queue<GameEvent> notificationQueue = new Queue<GameEvent>();
+    private bool notificationPausedGame;
+    private float notificationPreviousTimeScale = 1f;
     private Func<GameEvent> pendingNext;
     private float previousTimeScale = 1f;
     private readonly Dictionary<Color, Texture2D> generatedResourceIcons = new Dictionary<Color, Texture2D>();
+    private Font activityLogFont;
     private Camera miniMapCamera;
     private RenderTexture miniMapTexture;
     private SimpleStrategyCamera strategyCamera;
@@ -96,7 +101,15 @@ public class GameEventManager : MonoBehaviour
     private bool playerTurnAnnouncementActive;
     private int playerTurnCountdown;
     private bool playerStartedDeliveryToday;
-    private readonly List<string> aiActivityLog = new List<string>();
+    private bool victoryShown;
+    private readonly List<ActivityEntry> activityLog = new List<ActivityEntry>();
+
+    private class ActivityEntry
+    {
+        public string emoji;
+        public string text;
+        public Color color;
+    }
 
     private class MiniMapParcel
     {
@@ -166,7 +179,14 @@ public class GameEventManager : MonoBehaviour
             gameObject.AddComponent<TerritoryDistrictManager>();
         }
 
+        GameStoryManager storyManager = GetComponent<GameStoryManager>();
+        if (storyManager == null)
+        {
+            storyManager = gameObject.AddComponent<GameStoryManager>();
+        }
+
         SetupMiniMap();
+        AddActivity("SYSTEM", "🌆", "Operation started.", new Color(0.75f, 0.75f, 0.75f));
 
         if (CharacterSelect.playerCharacter == "Male")
         {
@@ -177,7 +197,7 @@ public class GameEventManager : MonoBehaviour
             popupBackground = femaleBackground;
         }
 
-        StartCoroutine(BeginPlayerTurn());
+        storyManager.BeginIntro(() => StartCoroutine(BeginPlayerTurn()));
     }
 
     void Update()
@@ -214,6 +234,7 @@ public class GameEventManager : MonoBehaviour
         PlayerTurnTimeRemaining = Mathf.Max(0f, PlayerTurnTimeRemaining - Time.deltaTime);
         if (PlayerTurnTimeRemaining <= 0f)
         {
+            ReportPlayerActivity("⏰", "Your phase reached 12:00; unused actions expired.");
             BeginAiTurn();
         }
     }
@@ -240,6 +261,13 @@ public class GameEventManager : MonoBehaviour
             miniMapTexture.Release();
             Destroy(miniMapTexture);
         }
+
+        if (activityLogFont != null)
+        {
+            Destroy(activityLogFont);
+        }
+
+        RestoreTimeAfterNotification();
     }
 
     void ShowEvent(GameEvent e)
@@ -278,6 +306,7 @@ public class GameEventManager : MonoBehaviour
 
         PlayButtonClick();
 
+        string eventName = currentEvent.name;
         var chosen = currentEvent.options[idx];
         bool wasNotification = isNotification;
 
@@ -286,10 +315,16 @@ public class GameEventManager : MonoBehaviour
         IsPopupOpen = false;
         isNotification = false;
 
+        if (wasNotification)
+        {
+            RestoreTimeAfterNotification();
+        }
+
         chosen.onChoose?.Invoke();
 
         if (!wasNotification)
         {
+            ReportPlayerActivity("🎲", $"{eventName}: {chosen.text}.");
             EventsCompleted++;
             CompletePlayerAction();
 
@@ -358,8 +393,7 @@ public class GameEventManager : MonoBehaviour
         PlayerTurnTimeRemaining = 0f;
         AiActionsRemaining = actionsPerSide;
         AiTurnTimeRemaining = aiTurnDuration;
-        aiActivityLog.Clear();
-        ReportAiActivity("Rival is planning its move...");
+        ReportAiActivity("Volkov is planning his move...", "👻");
         StartCoroutine(PlayAiTurn());
     }
 
@@ -425,7 +459,7 @@ public class GameEventManager : MonoBehaviour
                 bool completed = SharedActionRules.TryApplyResourceChange(ai, -hireCost, 0, 1);
                 if (completed)
                 {
-                    ReportAiActivity("Hired one worker.");
+                    ReportAiActivity("Hired one worker.", "👷");
                     FocusCameraOnAiFacility(AiFacilityRole.WorkerContact);
                 }
                 return completed;
@@ -445,7 +479,7 @@ public class GameEventManager : MonoBehaviour
                 if (started)
                 {
                     ai.ScheduleProduction(productionGoods, productionSeconds);
-                    ReportAiActivity($"Started production of {productionGoods} g.");
+                    ReportAiActivity($"Started production of {productionGoods} g.", "🏭");
                     FocusCameraOnAiFacility(AiFacilityRole.Factory);
                 }
                 return started;
@@ -460,7 +494,7 @@ public class GameEventManager : MonoBehaviour
                 if (started)
                 {
                     ai.ScheduleTransfer(transferSeconds);
-                    ReportAiActivity($"Moving {amount} g to the warehouse.");
+                    ReportAiActivity($"Moving {amount} g to the warehouse.", "🚚");
                     AnimateAiTransfer(transferSeconds);
                 }
                 return started;
@@ -484,7 +518,7 @@ public class GameEventManager : MonoBehaviour
 
         if (availableActions.Count == 0)
         {
-            ReportAiActivity("No valid action was available; rival waited.");
+            ReportAiActivity("No valid action was available; Volkov waited.", "⏳");
             return;
         }
 
@@ -502,6 +536,11 @@ public class GameEventManager : MonoBehaviour
 
     public static void FocusCameraOnWorldPosition(Vector3 worldPosition)
     {
+        FocusCameraOnWorldPosition(worldPosition, null);
+    }
+
+    public static void FocusCameraOnWorldPosition(Vector3 worldPosition, Action onCompleted)
+    {
         SimpleStrategyCamera camera = instance != null ? instance.strategyCamera : null;
         if (camera == null)
         {
@@ -509,7 +548,11 @@ public class GameEventManager : MonoBehaviour
         }
         if (camera != null)
         {
-            camera.FocusOn(worldPosition, () => { });
+            camera.FocusOn(worldPosition, onCompleted);
+        }
+        else
+        {
+            onCompleted?.Invoke();
         }
     }
 
@@ -532,34 +575,84 @@ public class GameEventManager : MonoBehaviour
         }
     }
 
-    public static void ReportAiActivity(string message)
+    public static void ReportPlayerActivity(string emoji, string message)
     {
         if (instance == null || string.IsNullOrWhiteSpace(message))
         {
             return;
         }
 
-        instance.aiActivityLog.Add(message);
-        while (instance.aiActivityLog.Count > 4)
+        instance.AddActivity("YOU", emoji, message, new Color(0.35f, 0.82f, 1f));
+        Debug.Log($"Player: {message}");
+    }
+
+    public static void ReportAiActivity(string message, string emoji = "👻")
+    {
+        if (instance == null || string.IsNullOrWhiteSpace(message))
         {
-            instance.aiActivityLog.RemoveAt(0);
+            return;
         }
-        Debug.Log($"AI: {message}");
+
+        instance.AddActivity("VOLKOV", emoji, message, new Color(1f, 0.42f, 0.42f));
+        Debug.Log($"Volkov: {message}");
+    }
+
+    void AddActivity(string actor, string emoji, string message, Color color)
+    {
+        activityLog.Add(new ActivityEntry
+        {
+            emoji = emoji,
+            text = $"{GetActivityClock()}  {actor}: {message}",
+            color = color
+        });
+        while (activityLog.Count > 7)
+        {
+            activityLog.RemoveAt(0);
+        }
+    }
+
+    string GetActivityClock()
+    {
+        return $"D{CurrentDay} {FormatDayClock()}";
+    }
+
+    string FormatDayClock()
+    {
+        float elapsedSeconds;
+        if (IsPlayerTurn)
+        {
+            elapsedSeconds = Mathf.Clamp(
+                playerTurnDuration - PlayerTurnTimeRemaining,
+                0f,
+                playerTurnDuration);
+        }
+        else if (AiTurnTimeRemaining > 0f)
+        {
+            elapsedSeconds = playerTurnDuration + Mathf.Clamp(
+                aiTurnDuration - AiTurnTimeRemaining,
+                0f,
+                aiTurnDuration);
+        }
+        else
+        {
+            elapsedSeconds = 0f;
+        }
+
+        int totalMinutes = Mathf.Clamp(Mathf.FloorToInt(elapsedSeconds) * 15, 0, 1440);
+        return $"{totalMinutes / 60:00}:{totalMinutes % 60:00}";
     }
 
     public static void NotifyPlayer(string title, string body)
     {
-        if (instance != null)
-        {
-            instance.EnqueueNotification(title, body);
-        }
+        NotifyPlayer(title, body, null);
     }
 
-    public static void NotifyPlayer(string title, string body)
+    public static void NotifyPlayer(string title, string body, Action onClose)
     {
         if (instance != null)
         {
-            instance.EnqueueNotification(title, body);
+            instance.EnqueueNotification(title, body, onClose);
+            instance.TryShowQueuedNotification();
         }
     }
 
@@ -585,6 +678,7 @@ public class GameEventManager : MonoBehaviour
         playerTurnCountdown = 0;
         playerTurnAnnouncementActive = false;
         PlayerTurnTimeRemaining = playerTurnDuration;
+        ReportPlayerActivity("🌅", $"Day {CurrentDay} started with {actionsPerSide} actions.");
         IsPopupOpen = eventActive;
     }
 
@@ -615,11 +709,26 @@ public class GameEventManager : MonoBehaviour
 
     void ShowNotification(GameEvent notif)
     {
+        if (BuildingPopupUI.IsAnyOpen)
+        {
+            BuildingPopupUI buildingPopup = FindFirstObjectByType<BuildingPopupUI>();
+            if (buildingPopup != null && buildingPopup.IsOpen)
+            {
+                buildingPopup.ClosePanel();
+            }
+        }
+
+        if (!notificationPausedGame)
+        {
+            notificationPreviousTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+            notificationPausedGame = true;
+        }
         isNotification = true;
         ShowEvent(notif);
     }
 
-    void EnqueueNotification(string title, string body)
+    void EnqueueNotification(string title, string body, Action onClose = null)
     {
         notificationQueue.Enqueue(new GameEvent
         {
@@ -627,9 +736,32 @@ public class GameEventManager : MonoBehaviour
             description = body,
             options = new List<EventOption>
             {
-                new EventOption("OK", () => { })
+                new EventOption("OK", () => onClose?.Invoke())
             }
         });
+    }
+
+    void TryShowQueuedNotification()
+    {
+        bool introCanShow = CurrentDay == 1 && !IsPlayerTurn &&
+                            PlayerActionsRemaining == 0 && AiTurnTimeRemaining <= 0f;
+        if (notificationQueue.Count > 0 && !eventActive &&
+            !playerTurnAnnouncementActive && !IsPauseMenuOpen &&
+            (IsPlayerTurn || introCanShow))
+        {
+            ShowNotification(notificationQueue.Dequeue());
+        }
+    }
+
+    void RestoreTimeAfterNotification()
+    {
+        if (!notificationPausedGame)
+        {
+            return;
+        }
+
+        Time.timeScale = notificationPreviousTimeScale;
+        notificationPausedGame = false;
     }
 
     void ApplyConsequences()
@@ -639,26 +771,34 @@ public class GameEventManager : MonoBehaviour
 
         int playerWagesPaid = R.PayDailyWorkerWages(out int playerWorkersWhoLeft);
         R.Opponent.PayDailyWorkerWages(out _);
+        bool policeRaidTriggered = R.rizik >= 100;
+        int riskBeforeReduction = R.rizik;
         int riskReduction = dailyRiskReduction +
                             (playerStartedDeliveryToday ? 0 : idleDeliveryRiskReduction);
         R.rizik = Mathf.Max(0, R.rizik - riskReduction);
         playerStartedDeliveryToday = false;
+        ReportPlayerActivity(
+            "🌙",
+            $"Day settled: paid {playerWagesPaid} in wages; risk reduced by {riskBeforeReduction - R.rizik}.");
         if (playerWorkersWhoLeft > 0)
         {
+            ReportPlayerActivity("👋", $"{playerWorkersWhoLeft} worker(s) left over unpaid wages.");
             EnqueueNotification(
                 "UNPAID WAGES",
                 $"You paid {playerWagesPaid} € in daily wages. {playerWorkersWhoLeft} worker(s) left because the rest could not be paid.");
         }
 
-        if (R.rizik >= 100)
+        if (policeRaidTriggered)
         {
             if (R.ConsumeRaidBribe())
             {
+                ReportPlayerActivity("🛡️", "Cross cancelled a police raid; risk reset to 30.");
                 EnqueueNotification(
                     "POLICE RAID AVOIDED",
                     "Your contact buried the report before the raid could begin.\n\n" +
                     "No money or workers were lost.\nRisk reset to 30."
                 );
+                GameStoryManager.ReportPoliceRaid(true);
                 R.EvaluateGameOver();
                 R.Clamp();
                 return;
@@ -677,6 +817,10 @@ public class GameEventManager : MonoBehaviour
                 Debug.Log("🚓 Jedan radnik je uhvaćen.");
             }
 
+            ReportPlayerActivity(
+                "🚨",
+                $"Police raid #{R.policeRaidCount}: lost {seizure} money and {workerLost} worker(s); risk reset to 30.");
+
             string body =
                 "Sirens. Doors kicked in. Half your stash is gone " +
                 "and your name is on every report tonight.\n\n" +
@@ -685,6 +829,7 @@ public class GameEventManager : MonoBehaviour
                 $"Police raids: {R.policeRaidCount}/{R.maxPoliceRaids}";
             if (workerLost > 0) body += "\nA worker was arrested (−1)";
             EnqueueNotification("🚓 POLICE RAID!", body);
+            GameStoryManager.ReportPoliceRaid(false);
 
             if (R.policeRaidCount >= R.maxPoliceRaids)
             {
@@ -719,6 +864,42 @@ public class GameEventManager : MonoBehaviour
         };
         eventActive = true;
         IsPopupOpen = true;
+    }
+
+    void ShowVictory(int territoryPercent)
+    {
+        if (victoryShown || GameResources.Instance == null)
+        {
+            return;
+        }
+
+        victoryShown = true;
+        StopAllCoroutines();
+        IsPlayerTurn = false;
+        PlayerActionsRemaining = 0;
+        AiActionsRemaining = 0;
+        PlayerTurnTimeRemaining = 0f;
+        AiTurnTimeRemaining = 0f;
+        notificationQueue.Clear();
+        pendingNext = null;
+        GameResources.Instance.chapterEnded = true;
+        isNotification = true;
+
+        ShowEvent(new GameEvent
+        {
+            name = "VICTORY",
+            description =
+                $"You control {territoryPercent}% of the city.\n\n" +
+                "Volkov no longer has enough territory to challenge your power. " +
+                "The city belongs to you.",
+            options = new List<EventOption>
+            {
+                new EventOption("Return to Main Menu", () =>
+                {
+                    SceneManager.LoadScene("MainMenu");
+                })
+            }
+        });
     }
 
     IEnumerator DelayedShow(Func<GameEvent> builder)
@@ -2045,7 +2226,7 @@ public class GameEventManager : MonoBehaviour
         DrawResourceBar();
         DrawTurnPanel();
         DrawMiniMap();
-        DrawAiActivityPanel();
+        DrawActivityPanel();
 
         if (IsPauseMenuOpen)
         {
@@ -2090,40 +2271,64 @@ public class GameEventManager : MonoBehaviour
         else
         {
             status = IsPlayerTurn
-                ? $"Day {CurrentDay}  |  Actions: {PlayerActionsRemaining}/{actionsPerSide}  |  Time: {Mathf.CeilToInt(PlayerTurnTimeRemaining)}s"
-                : $"Day {CurrentDay}  |  AI actions: {AiActionsRemaining}/{actionsPerSide}  |  Time: {Mathf.CeilToInt(AiTurnTimeRemaining)}s";
+                ? $"Day {CurrentDay}  |  Actions: {PlayerActionsRemaining}/{actionsPerSide}  |  {FormatDayClock()}"
+                : $"Day {CurrentDay}  |  Volkov: {AiActionsRemaining}/{actionsPerSide}  |  {FormatDayClock()}";
         }
         GUI.Label(new Rect(panelRect.x + 8f, panelRect.y + 8f, panelRect.width - 16f, 26f), status, statusStyle);
     }
 
-    void DrawAiActivityPanel()
+    void DrawActivityPanel()
     {
-        if (IsPlayerTurn || aiActivityLog.Count == 0)
-        {
-            return;
-        }
-
-        const float width = 360f;
-        const float height = 160f;
+        const float width = 430f;
+        const float height = 240f;
         const float margin = 12f;
         Rect panel = new Rect(margin, barHeight + margin, width, height);
-        GUI.Box(panel, "RIVAL ACTIVITY");
+        GUI.Box(panel, "ACTIVITY LOG");
 
+        if (activityLogFont == null)
+        {
+            activityLogFont = Font.CreateDynamicFontFromOSFont(
+                new[] { "Segoe UI Emoji", "Segoe UI Symbol", "Arial" },
+                18);
+        }
         GUIStyle activityStyle = new GUIStyle(GUI.skin.label)
         {
             fontSize = 14,
+            fontStyle = FontStyle.Bold,
             normal = { textColor = Color.white },
             wordWrap = true
         };
+        GUIStyle emojiStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = activityLogFont,
+            fontSize = 17,
+            alignment = TextAnchor.MiddleCenter,
+            normal = { textColor = Color.white }
+        };
 
         float y = panel.y + 30f;
-        for (int i = aiActivityLog.Count - 1; i >= 0; i--)
+        for (int i = activityLog.Count - 1; i >= 0; i--)
         {
+            activityStyle.normal.textColor = activityLog[i].color;
+            emojiStyle.normal.textColor = activityLog[i].color;
+            float textWidth = panel.width - 50f;
+            float entryHeight = Mathf.Max(
+                27f,
+                activityStyle.CalcHeight(new GUIContent(activityLog[i].text), textWidth));
+            if (y + entryHeight > panel.yMax - 8f)
+            {
+                break;
+            }
+
             GUI.Label(
-                new Rect(panel.x + 12f, y, panel.width - 24f, 26f),
-                $"• {aiActivityLog[i]}",
+                new Rect(panel.x + 10f, y, 28f, 27f),
+                activityLog[i].emoji,
+                emojiStyle);
+            GUI.Label(
+                new Rect(panel.x + 40f, y, textWidth, entryHeight),
+                activityLog[i].text,
                 activityStyle);
-            y += 28f;
+            y += entryHeight + 4f;
         }
     }
 
@@ -2173,10 +2378,10 @@ public class GameEventManager : MonoBehaviour
         cameraObject.hideFlags = HideFlags.DontSave;
         miniMapCamera = cameraObject.AddComponent<Camera>();
         miniMapCamera.transform.position = new Vector3(centerX, 1000f, centerZ);
-        miniMapCamera.transform.rotation = Quaternion.Euler(90f, 0f, 90f);
+        miniMapCamera.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
         miniMapCamera.orthographic = true;
-        const float textureAspect = 344f / 240f;
-        miniMapCamera.orthographicSize = Mathf.Max(mapWidth * 0.5f, mapHeight / (2f * textureAspect)) * 1.02f;
+        const float textureAspect = 432f / 512f;
+        miniMapCamera.orthographicSize = Mathf.Max(mapHeight * 0.5f, mapWidth / (2f * textureAspect)) * 1.02f;
         miniMapCamera.nearClipPlane = 0.1f;
         miniMapCamera.farClipPlane = 2000f;
         miniMapCamera.clearFlags = CameraClearFlags.SolidColor;
@@ -2188,7 +2393,7 @@ public class GameEventManager : MonoBehaviour
             miniMapCamera.cullingMask = mainCamera.cullingMask;
         }
 
-        miniMapTexture = new RenderTexture(344, 240, 16)
+        miniMapTexture = new RenderTexture(432, 512, 16)
         {
             name = "TerritoryMiniMap",
             filterMode = FilterMode.Bilinear
@@ -2216,24 +2421,101 @@ public class GameEventManager : MonoBehaviour
             return;
         }
 
-        const float width = 280f;
-        const float height = 220f;
+        const float width = 360f;
+        const float height = 470f;
         const float margin = 12f;
         Rect panel = new Rect(Screen.width - width - margin, Screen.height - height - margin, width, height);
-        Rect map = new Rect(panel.x + 8f, panel.y + 28f, panel.width - 16f, panel.height - 36f);
+        Rect map = new Rect(panel.x + 10f, panel.y + 56f, panel.width - 20f, panel.height - 66f);
 
         GUI.Box(panel, "CITY TERRITORY");
-        GUI.DrawTexture(map, miniMapTexture, ScaleMode.StretchToFill, false);
 
         float playerPercent = GetTerritoryPercent(TerritoryOwner.Player);
         float opponentPercent = GetTerritoryPercent(TerritoryOwner.AI);
         float neutralPercent = Mathf.Max(0f, 100f - playerPercent - opponentPercent);
 
-        DrawMiniMapTerritories(map, playerPercent, neutralPercent);
+        DrawMiniMapLegend(
+            new Rect(panel.xMax - 352f, panel.y + 28f, 342f, 22f),
+            playerPercent,
+            neutralPercent,
+            opponentPercent);
+        GUI.DrawTexture(map, miniMapTexture, ScaleMode.StretchToFill, false);
 
+        DrawMiniMapTerritories(map);
+        DrawMiniMapView(map);
         DrawMiniMapMarkers(map);
-        GUI.Label(new Rect(map.x + 4f, map.y + 2f, map.width - 8f, 22f),
-            $"You {playerPercent:0}%   Neutral {neutralPercent:0}%   Rival {opponentPercent:0}%");
+        DrawDistrictLabels(map);
+    }
+
+    void DrawMiniMapLegend(
+        Rect rect,
+        float playerPercent,
+        float neutralPercent,
+        float opponentPercent)
+    {
+        GUIStyle style = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleLeft,
+            fontSize = 11,
+            normal = { textColor = Color.white }
+        };
+        string[] labels =
+        {
+            $"You {playerPercent:0}%",
+            $"Neutral {neutralPercent:0}%",
+            $"Volkov {opponentPercent:0}%"
+        };
+        Color[] colors =
+        {
+            playerTerritoryColor,
+            neutralTerritoryColor,
+            opponentTerritoryColor
+        };
+        float itemWidth = rect.width / labels.Length;
+        for (int i = 0; i < labels.Length; i++)
+        {
+            float x = rect.x + i * itemWidth;
+            DrawTerritoryRect(
+                new Rect(x, rect.y + 5f, 11f, 11f),
+                new Color(colors[i].r, colors[i].g, colors[i].b, 1f));
+            GUI.Label(new Rect(x + 16f, rect.y, itemWidth - 16f, rect.height), labels[i], style);
+        }
+    }
+
+    void DrawDistrictLabels(Rect map)
+    {
+        GUIStyle style = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 9,
+            fontStyle = FontStyle.Normal,
+            normal = { textColor = new Color(1f, 1f, 1f, 0.82f) }
+        };
+
+        for (int id = 0; id < TerritoryDistrictManager.DistrictSlotCount; id++)
+        {
+            if (!TerritoryDistrictManager.TryGetDistrictStatus(
+                    id,
+                    out string districtName,
+                    out int controlScore,
+                    out _,
+                    out _,
+                    out Vector3 center))
+            {
+                continue;
+            }
+
+            Vector2 labelPosition = WorldToMiniMapPosition(map, center);
+            Rect labelRect = new Rect(
+                labelPosition.x - 48f,
+                labelPosition.y - 9f,
+                96f,
+                18f);
+            Color previousColor = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.32f);
+            GUI.DrawTexture(labelRect, Texture2D.whiteTexture);
+            GUI.color = previousColor;
+            GUI.Label(labelRect, $"{districtName} {controlScore:+0;-0;0}", style);
+        }
     }
 
     float GetTerritoryPercent(TerritoryOwner owner)
@@ -2261,30 +2543,149 @@ public class GameEventManager : MonoBehaviour
         return ownedArea / miniMapParcelArea * 100f;
     }
 
+    public static void RefreshTerritoryInfluence()
+    {
+        if (instance == null || GameResources.Instance == null)
+        {
+            return;
+        }
+
+        int playerTerritoryPercent = Mathf.RoundToInt(
+            instance.GetTerritoryPercent(TerritoryOwner.Player));
+        GameResources.Instance.utjecaj = playerTerritoryPercent;
+        GameResources.Instance.Opponent.influence = Mathf.RoundToInt(
+            instance.GetTerritoryPercent(TerritoryOwner.AI));
+
+        GameStoryManager.ReportTerritoryPercent(playerTerritoryPercent);
+
+        if (playerTerritoryPercent >= VictoryTerritoryPercent &&
+            !GameResources.Instance.gameOver &&
+            !GameResources.Instance.chapterEnded)
+        {
+            if (!GameStoryManager.BeginVictorySequence(
+                    playerTerritoryPercent,
+                    () => instance.ShowVictory(playerTerritoryPercent)))
+            {
+                instance.ShowVictory(playerTerritoryPercent);
+            }
+        }
+    }
+
     void DrawMiniMapMarkers(Rect map)
     {
         BuildingInfo[] buildings = FindObjectsByType<BuildingInfo>(FindObjectsSortMode.None);
         foreach (BuildingInfo building in buildings)
         {
+            if (building.IsStoryLocked)
+            {
+                continue;
+            }
             DrawMiniMapMarker(map, building.transform.position, Color.blue, 7f);
         }
 
         if (Camera.main != null)
         {
-            DrawMiniMapMarker(map, Camera.main.transform.position, Color.white, 6f);
+            Vector2 playerPosition = WorldToMiniMapPosition(map, Camera.main.transform.position);
+            DrawTerritoryRect(
+                new Rect(playerPosition.x - 6f, playerPosition.y - 6f, 12f, 12f),
+                new Color(0f, 0f, 0f, 0.8f));
+            DrawTerritoryRect(
+                new Rect(playerPosition.x - 4f, playerPosition.y - 4f, 8f, 8f),
+                Color.white);
+            DrawTerritoryRect(
+                new Rect(playerPosition.x - 2f, playerPosition.y - 2f, 4f, 4f),
+                new Color(0.15f, 0.85f, 1f, 1f));
         }
+    }
+
+    void DrawMiniMapView(Rect map)
+    {
+        Camera playerCamera = Camera.main;
+        if (playerCamera == null)
+        {
+            return;
+        }
+
+        Vector2[] viewCorners =
+        {
+            WorldToMiniMapPosition(map, GetCameraGroundViewPoint(playerCamera, 0f, 0f)),
+            WorldToMiniMapPosition(map, GetCameraGroundViewPoint(playerCamera, 1f, 0f)),
+            WorldToMiniMapPosition(map, GetCameraGroundViewPoint(playerCamera, 1f, 1f)),
+            WorldToMiniMapPosition(map, GetCameraGroundViewPoint(playerCamera, 0f, 1f))
+        };
+        Color viewColor = new Color(0.15f, 0.85f, 1f, 0.78f);
+        for (int i = 0; i < viewCorners.Length; i++)
+        {
+            DrawMiniMapLine(
+                viewCorners[i],
+                viewCorners[(i + 1) % viewCorners.Length],
+                viewColor,
+                2f);
+        }
+
+        Vector2 cameraPosition = WorldToMiniMapPosition(map, playerCamera.transform.position);
+        DrawMiniMapLine(cameraPosition, viewCorners[2], new Color(0.15f, 0.85f, 1f, 0.28f), 1f);
+        DrawMiniMapLine(cameraPosition, viewCorners[3], new Color(0.15f, 0.85f, 1f, 0.28f), 1f);
+    }
+
+    Vector3 GetCameraGroundViewPoint(Camera playerCamera, float viewportX, float viewportY)
+    {
+        Ray ray = playerCamera.ViewportPointToRay(new Vector3(viewportX, viewportY));
+        Plane ground = new Plane(Vector3.up, Vector3.zero);
+        Vector3 point;
+        if (ground.Raycast(ray, out float distance))
+        {
+            point = ray.GetPoint(distance);
+        }
+        else
+        {
+            Vector3 flatDirection = Vector3.ProjectOnPlane(ray.direction, Vector3.up).normalized;
+            float mapWidth = strategyCamera.maxX - strategyCamera.minX;
+            float mapHeight = strategyCamera.maxZ - strategyCamera.minZ;
+            point = playerCamera.transform.position + flatDirection * Mathf.Sqrt(
+                mapWidth * mapWidth + mapHeight * mapHeight);
+        }
+
+        point.x = Mathf.Clamp(point.x, strategyCamera.minX, strategyCamera.maxX);
+        point.z = Mathf.Clamp(point.z, strategyCamera.minZ, strategyCamera.maxZ);
+        point.y = 0f;
+        return point;
+    }
+
+    void DrawMiniMapLine(Vector2 start, Vector2 end, Color color, float width)
+    {
+        Vector2 difference = end - start;
+        if (difference.sqrMagnitude < 0.01f)
+        {
+            return;
+        }
+
+        Matrix4x4 previousMatrix = GUI.matrix;
+        float angle = Mathf.Atan2(difference.y, difference.x) * Mathf.Rad2Deg;
+        GUIUtility.RotateAroundPivot(angle, start);
+        DrawTerritoryRect(
+            new Rect(start.x, start.y - width * 0.5f, difference.magnitude, width),
+            color);
+        GUI.matrix = previousMatrix;
     }
 
     void DrawMiniMapMarker(Rect map, Vector3 worldPosition, Color color, float size)
     {
-        float normalizedX = Mathf.InverseLerp(strategyCamera.minX, strategyCamera.maxX, worldPosition.x);
-        float normalizedZ = Mathf.InverseLerp(strategyCamera.minZ, strategyCamera.maxZ, worldPosition.z);
+        Vector2 markerPosition = WorldToMiniMapPosition(map, worldPosition);
         Rect marker = new Rect(
-            map.x + (1f - normalizedZ) * map.width - size * 0.5f,
-            map.y + (1f - normalizedX) * map.height - size * 0.5f,
+            markerPosition.x - size * 0.5f,
+            markerPosition.y - size * 0.5f,
             size,
             size);
         DrawTerritoryRect(marker, color);
+    }
+
+    Vector2 WorldToMiniMapPosition(Rect map, Vector3 worldPosition)
+    {
+        Vector3 viewport = miniMapCamera.WorldToViewportPoint(worldPosition);
+        return new Vector2(
+            map.x + viewport.x * map.width,
+            map.y + (1f - viewport.y) * map.height);
     }
 
     void CacheMiniMapParcels()
@@ -2370,6 +2771,7 @@ public class GameEventManager : MonoBehaviour
         {
             districtManager.InitializeDistricts();
         }
+        RefreshTerritoryInfluence();
     }
 
     void SetupAiFacilities()
@@ -2462,60 +2864,52 @@ public class GameEventManager : MonoBehaviour
         marker.Configure(role);
     }
 
-    void DrawMiniMapTerritories(Rect map, float playerPercent, float neutralPercent)
+    void DrawMiniMapTerritories(Rect map)
     {
-        if (miniMapParcelArea <= 0f)
+        for (int id = 0; id < TerritoryDistrictManager.DistrictSlotCount; id++)
         {
-            return;
-        }
-
-        float playerAreaLimit = miniMapParcelArea * playerPercent / 100f;
-        float neutralAreaLimit = miniMapParcelArea * (playerPercent + neutralPercent) / 100f;
-        float accumulatedArea = 0f;
-
-        foreach (MiniMapParcel parcel in miniMapParcels)
-        {
-            float parcelMiddle = accumulatedArea + parcel.area * 0.5f;
-            Color color = parcelMiddle <= playerAreaLimit
-                ? playerTerritoryColor
-                : parcelMiddle <= neutralAreaLimit ? neutralTerritoryColor : opponentTerritoryColor;
-            TerritoryHouse territoryHouse = parcel.source != null
-                ? parcel.source.GetComponent<TerritoryHouse>()
-                : null;
-            if (territoryHouse != null && territoryHouse.IsPlayerOwned)
+            if (!TerritoryDistrictManager.TryGetDistrictStatus(
+                    id,
+                    out _,
+                    out int controlScore,
+                    out int controlLimit,
+                    out _,
+                    out _) ||
+                !TerritoryDistrictManager.TryGetDistrictBounds(
+                    id,
+                    out Vector3 boundsMinimum,
+                    out Vector3 boundsMaximum))
             {
-                color = playerTerritoryColor;
-            }
-            else if (territoryHouse != null && territoryHouse.IsAiOwned)
-            {
-                color = opponentTerritoryColor;
-            }
-            else if (territoryHouse != null && territoryHouse.Owner == TerritoryOwner.Neutral)
-            {
-                color = neutralTerritoryColor;
-            }
-            else if (parcel.playerOwned)
-            {
-                color = playerTerritoryColor;
+                continue;
             }
 
-            DrawMiniMapParcel(map, parcel, color);
-            accumulatedArea += parcel.area;
+            Vector2 minimum = WorldToMiniMapPosition(map, boundsMinimum);
+            Vector2 maximum = WorldToMiniMapPosition(map, boundsMaximum);
+            Rect districtRect = Rect.MinMaxRect(
+                minimum.x,
+                maximum.y,
+                maximum.x,
+                minimum.y);
+
+            DrawTerritoryRect(districtRect, GetDistrictControlColor(controlScore, controlLimit));
+            Color borderColor = new Color(1f, 1f, 1f, 0.42f);
+            DrawTerritoryRect(new Rect(districtRect.x, districtRect.y, districtRect.width, 1f), borderColor);
+            DrawTerritoryRect(new Rect(districtRect.x, districtRect.yMax - 1f, districtRect.width, 1f), borderColor);
+            DrawTerritoryRect(new Rect(districtRect.x, districtRect.y, 1f, districtRect.height), borderColor);
+            DrawTerritoryRect(new Rect(districtRect.xMax - 1f, districtRect.y, 1f, districtRect.height), borderColor);
         }
     }
 
-    void DrawMiniMapParcel(Rect map, MiniMapParcel parcel, Color color)
+    Color GetDistrictControlColor(int controlScore, int controlLimit)
     {
-        float normalizedX = Mathf.InverseLerp(strategyCamera.minX, strategyCamera.maxX, parcel.center.x);
-        float normalizedZ = Mathf.InverseLerp(strategyCamera.minZ, strategyCamera.maxZ, parcel.center.z);
-        float width = Mathf.Max(2f, parcel.size.z / (strategyCamera.maxZ - strategyCamera.minZ) * map.width);
-        float height = Mathf.Max(2f, parcel.size.x / (strategyCamera.maxX - strategyCamera.minX) * map.height);
-        Rect rect = new Rect(
-            map.x + (1f - normalizedZ) * map.width - width * 0.5f,
-            map.y + (1f - normalizedX) * map.height - height * 0.5f,
-            width,
-            height);
-        DrawTerritoryRect(rect, color);
+        float strength = Mathf.Clamp01(Mathf.Abs(controlScore) / (float)Mathf.Max(1, controlLimit));
+        Color color = controlScore > 0
+            ? Color.Lerp(neutralTerritoryColor, playerTerritoryColor, strength)
+            : controlScore < 0
+                ? Color.Lerp(neutralTerritoryColor, opponentTerritoryColor, strength)
+                : neutralTerritoryColor;
+        color.a *= 0.55f;
+        return color;
     }
 
     void DrawTerritoryRect(Rect rect, Color color)
@@ -2611,7 +3005,7 @@ public class GameEventManager : MonoBehaviour
                     ? $" (+{DeliveryOrderManager.PendingPlayerRisk} pending)"
                     : "") +
                 $"/100 (Raids {r.policeRaidCount}/{r.maxPoliceRaids})",
-            $"Influence: {r.utjecaj}%"
+            $"Influence: {r.utjecaj}% territory"
         };
 
         GUIStyle style = new GUIStyle(GUI.skin.label)

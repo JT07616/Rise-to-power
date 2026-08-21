@@ -72,7 +72,9 @@ public class BuildingPopupUI : MonoBehaviour
 
     void OnGUI()
     {
-        if (panel == null || !panel.activeSelf || currentBuilding == null || !currentBuilding.hasProductionControls)
+        bool isPoliceStation = currentBuilding != null && currentBuilding.buildingName == "Police Station";
+        if (panel == null || !panel.activeSelf || currentBuilding == null ||
+            (!currentBuilding.hasProductionControls && !isPoliceStation))
         {
             return;
         }
@@ -100,6 +102,22 @@ public class BuildingPopupUI : MonoBehaviour
         float totalWidth = buttonWidth * buttonCount + gap * (buttonCount - 1);
         float x = panelRect.x + (panelRect.width - totalWidth) / 2f;
         float y = panelRect.yMax - buttonHeight - 18f;
+
+        if (isPoliceStation)
+        {
+            GUI.enabled = AmbushTrapManager.CanPlayerSetAmbush;
+            if (GUI.Button(
+                    new Rect(x, y, buttonWidth, buttonHeight),
+                    AmbushTrapManager.GetPlayerAmbushButtonLabel()))
+            {
+                PlayButtonClick();
+                AmbushTrapManager.TrySetPlayerAmbush();
+                RefreshText();
+            }
+
+            GUI.enabled = true;
+            return;
+        }
 
         if (currentBuilding.buildingRole == BuildingRole.CorruptOfficer)
         {
@@ -235,6 +253,11 @@ public class BuildingPopupUI : MonoBehaviour
 
     private int GetActionButtonCount()
     {
+        if (currentBuilding != null && currentBuilding.buildingName == "Police Station")
+        {
+            return 1;
+        }
+
         if (currentBuilding != null && currentBuilding.buildingRole == BuildingRole.CorruptOfficer)
         {
             return currentBuilding.IsUnlocked() ? 2 : 1;

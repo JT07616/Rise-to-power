@@ -44,40 +44,54 @@ public class AmbushTrapManager : MonoBehaviour
         }
     }
 
-    void OnGUI()
+    public static string GetPlayerAmbushButtonLabel()
     {
-        if (!GameEventManager.IsPlayerTurn || GameEventManager.IsPauseMenuOpen ||
-            GameEventManager.IsPopupOpen || DeliveryOrderManager.IsPopupOpen ||
-            BuildingPopupUI.IsAnyOpen)
+        if (instance == null)
         {
-            return;
+            return "Ambush unavailable";
         }
 
-        Rect buttonRect = new Rect(Screen.width - 205f, 48f, 190f, 32f);
-        if (trapOwner == TerritoryOwner.Player)
+        if (instance.trapOwner == TerritoryOwner.Player)
         {
-            GUI.Label(buttonRect, "Ambush active: worker is waiting");
-            return;
+            return "Ambush active";
         }
 
-        if (trapOwner == TerritoryOwner.AI)
+        if (instance.trapOwner == TerritoryOwner.AI)
         {
-            GUI.Label(buttonRect, "Rival may have set an ambush");
-            return;
+            return "No route available";
         }
 
-        if (GameEventManager.CurrentDay < playerAmbushAvailableDay)
+        if (GameEventManager.CurrentDay < instance.playerAmbushAvailableDay)
         {
-            GUI.Label(buttonRect, $"Ambush ready on day {playerAmbushAvailableDay}");
-            return;
+            return $"Ready on day {instance.playerAmbushAvailableDay}";
         }
 
-        GUI.enabled = CanPlayerSetAmbush;
-        if (GUI.Button(buttonRect, "Set delivery ambush"))
+        return "Set delivery ambush";
+    }
+
+    public static string GetPlayerAmbushStatus()
+    {
+        if (instance == null)
         {
-            TrySetPlayerAmbush();
+            return "Delivery-route intelligence is unavailable.";
         }
-        GUI.enabled = true;
+
+        if (instance.trapOwner == TerritoryOwner.Player)
+        {
+            return "Ambush: active; one worker is waiting for Volkov's next suitable delivery.";
+        }
+
+        if (instance.trapOwner == TerritoryOwner.AI)
+        {
+            return "Ambush: Cross cannot confirm a safe route right now.";
+        }
+
+        if (GameEventManager.CurrentDay < instance.playerAmbushAvailableDay)
+        {
+            return $"Ambush: new route intelligence arrives on day {instance.playerAmbushAvailableDay}.";
+        }
+
+        return "Ambush: available; requires one free worker and one action.";
     }
 
     public static bool TrySetPlayerAmbush()
@@ -88,6 +102,7 @@ public class AmbushTrapManager : MonoBehaviour
         }
 
         instance.trapOwner = TerritoryOwner.Player;
+        GameEventManager.ReportPlayerActivity("🕵️", "Set an ambush for Volkov's next suitable delivery.");
         GameEventManager.CompletePlayerAction();
         Debug.Log("Player set a delivery ambush. The assigned worker remains busy until the rival is caught.");
         return true;
@@ -109,7 +124,7 @@ public class AmbushTrapManager : MonoBehaviour
         }
 
         instance.trapOwner = TerritoryOwner.AI;
-        GameEventManager.ReportAiActivity("Set a delivery ambush.");
+        GameEventManager.ReportAiActivity("Set a delivery ambush.", "🕵️");
         return true;
     }
 
@@ -163,15 +178,24 @@ public class AmbushTrapManager : MonoBehaviour
         if (winner == TerritoryOwner.Player)
         {
             instance.playerAmbushAvailableDay = GameEventManager.CurrentDay + instance.cooldownDays;
-            GameEventManager.NotifyPlayer(
-                "AMBUSH SUCCESS",
-                $"Rival delivery was intercepted. You took {stolenMoney} money and {recoveredGoods} g of goods.");
+            GameEventManager.ReportPlayerActivity(
+                "⚔️",
+                $"Ambushed Volkov: took {stolenMoney} money and recovered {recoveredGoods} g.");
+            if (!GameStoryManager.ReportPlayerAmbushSucceeded(stolenMoney, recoveredGoods))
+            {
+                GameEventManager.NotifyPlayer(
+                    "AMBUSH SUCCESS",
+                    $"Volkov's delivery was intercepted. You took {stolenMoney} money and {recoveredGoods} g of goods.");
+            }
         }
         else
         {
             instance.rivalAmbushAvailableDay = GameEventManager.CurrentDay + instance.cooldownDays;
+            GameEventManager.ReportAiActivity(
+                $"Ambushed your delivery: took {stolenMoney} money and {deliveredGoods} g.",
+                "⚔️");
             GameEventManager.NotifyPlayer(
-                "RIVAL AMBUSH",
+                "VOLKOV AMBUSH",
                 $"Your delivery was intercepted. You lost {stolenMoney} money and {deliveredGoods} g of goods.");
         }
 

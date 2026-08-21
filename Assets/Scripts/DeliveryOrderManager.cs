@@ -7,7 +7,7 @@ public class DeliveryOrderManager : MonoBehaviour
     private static DeliveryOrderManager instance;
 
     [Header("Orders")]
-    [Min(1)] public int offersPerDay = 4;
+    [Min(1)] public int offersPerDay = 5;
     public int minRisk = 4;
     public int maxRisk = 30;
     [Min(1)] public int minGoodsPerDelivery = 5;
@@ -230,7 +230,8 @@ public class DeliveryOrderManager : MonoBehaviour
         GameEventManager.ReportAiActivity(
             delivery.usesVehicle
                 ? $"Vehicle started a {grams} g delivery to {target.Owner} territory."
-                : $"Started a timed {grams} g delivery to {target.Owner} territory ({duration:0}s).");
+                : $"Started a timed {grams} g delivery to {target.Owner} territory ({duration:0}s).",
+            "🚐");
         return true;
     }
 
@@ -519,15 +520,13 @@ public class DeliveryOrderManager : MonoBehaviour
         GUILayout.Label($"Customer: {order.customerName}");
         GUILayout.Label($"Territory: {GetTerritoryName(order.territoryOwner)}");
         GUILayout.Label($"Requested goods: {order.grams} g");
-        int completedAtHouse = order.target != null ? order.target.CompletedDeliveryCount : 0;
-        int captureRequirement = order.target != null ? order.target.PlayerCaptureRequirement : 6;
-        if (captureRequirement > 0)
+        if (order.target != null && order.target.TryGetDistrictControl(
+                out string districtName,
+                out int controlScore,
+                out int controlLimit))
         {
-            GUILayout.Label($"Territory progress at this house: {Mathf.Min(captureRequirement, completedAtHouse)}/{captureRequirement}");
-        }
-        else
-        {
-            GUILayout.Label("Territory status: already controlled by you");
+            GUILayout.Label($"{districtName} control: {controlScore:+0;-0;0} " +
+                            $"(-{controlLimit} Volkov / +{controlLimit} you)");
         }
         GUILayout.Label($"Payment: +{order.reward} €");
         GUILayout.Label($"Market demand: {GetDemandName(order.marketMultiplier)}");
@@ -564,7 +563,7 @@ public class DeliveryOrderManager : MonoBehaviour
             case TerritoryOwner.Player:
                 return "YOUR TERRITORY";
             case TerritoryOwner.AI:
-                return "RIVAL TERRITORY";
+                return "VOLKOV TERRITORY";
             default:
                 return "NEUTRAL TERRITORY";
         }
@@ -614,6 +613,9 @@ public class DeliveryOrderManager : MonoBehaviour
         order.inProgress = true;
         pendingPlayerDeliveries.Add(order);
         GameEventManager.ReportPlayerDeliveryStarted();
+        GameEventManager.ReportPlayerActivity(
+            "🚐",
+            $"Started {order.grams} g delivery to {order.customerName} ({order.duration:0}s).");
 
         Vector3 startPosition = GetVehicleStartPosition();
         Vector3 destinationPosition = order.target != null
@@ -665,28 +667,33 @@ public class DeliveryOrderManager : MonoBehaviour
         order.inProgress = false;
         order.completed = true;
         pendingPlayerDeliveries.Remove(order);
-        int influence = Mathf.Max(1, Mathf.CeilToInt(order.grams / 10f));
 
         if (GameResources.Instance != null)
         {
             SharedActionRules.CompleteDelivery(
                 GameResources.Instance,
                 order.reward,
-                order.risk,
-                influence);
+                order.risk);
         }
 
         bool territoryCaptured = order.target != null &&
-                                 order.target.RegisterCompletedDelivery(TerritoryOwner.Player, influence);
+                                 order.target.RegisterCompletedDelivery(TerritoryOwner.Player);
         if (order.target != null)
         {
             order.target.Deactivate();
         }
 
+        GameStoryManager.ReportSuccessfulPlayerDelivery();
+        GameEventManager.ReportPlayerActivity(
+            territoryCaptured ? "🏴" : "💰",
+            territoryCaptured
+                ? $"Delivery complete: captured territory near {order.customerName}."
+                : $"Delivery complete for {order.customerName}: +{order.reward}, risk +{order.risk}.");
+
         Debug.Log($"Delivery completed for {order.customerName}: {order.grams} g, +{order.reward} €, risk +{order.risk}.");
         if (territoryCaptured)
         {
-            Debug.Log($"Territory captured after delivering enough influence for {order.customerName}.");
+            Debug.Log($"Territory captured after reaching full control for {order.customerName}.");
         }
     }
 
@@ -722,27 +729,32 @@ public class DeliveryOrderManager : MonoBehaviour
             order.inProgress = false;
             order.completed = true;
             pendingPlayerDeliveries.Remove(order);
-            int influence = Mathf.Max(1, Mathf.CeilToInt(order.grams / 10f));
             if (GameResources.Instance != null)
             {
                 SharedActionRules.CompleteDelivery(
                     GameResources.Instance,
                     order.reward,
-                    order.risk,
-                    influence);
+                    order.risk);
             }
 
             bool territoryCaptured = order.target != null &&
-                                     order.target.RegisterCompletedDelivery(TerritoryOwner.Player, influence);
+                                     order.target.RegisterCompletedDelivery(TerritoryOwner.Player);
             if (order.target != null)
             {
                 order.target.Deactivate();
             }
 
+            GameStoryManager.ReportSuccessfulPlayerDelivery();
+            GameEventManager.ReportPlayerActivity(
+                territoryCaptured ? "🏴" : "💰",
+                territoryCaptured
+                    ? $"Delivery complete: captured territory near {order.customerName}."
+                    : $"Delivery complete for {order.customerName}: +{order.reward}, risk +{order.risk}.");
+
             Debug.Log($"Delivery completed for {order.customerName}: {order.grams} g, +{order.reward} €, risk +{order.risk}.");
             if (territoryCaptured)
             {
-                Debug.Log($"Territory captured after delivering enough influence for {order.customerName}.");
+                Debug.Log($"Territory captured after reaching full control for {order.customerName}.");
             }
             activeDeliveries.RemoveAt(i);
         }
@@ -780,14 +792,13 @@ public class DeliveryOrderManager : MonoBehaviour
         OpponentResources ai = GameResources.Instance != null
             ? GameResources.Instance.Opponent
             : null;
-        int influence = Mathf.Max(1, Mathf.CeilToInt(delivery.grams / 10f));
-        SharedActionRules.CompleteDelivery(ai, delivery.reward, delivery.risk, influence);
+        SharedActionRules.CompleteDelivery(ai, delivery.reward, delivery.risk);
 
         TerritoryOwner previousOwner = delivery.target != null
             ? delivery.target.Owner
             : TerritoryOwner.Neutral;
         bool captured = delivery.target != null &&
-            delivery.target.RegisterDelivery(TerritoryOwner.AI, influence);
+            delivery.target.RegisterDelivery(TerritoryOwner.AI);
 
         if (captured && delivery.targetRenderer != null &&
             delivery.targetRenderer.GetComponent<DeliveryOrderTarget>() == null)
@@ -798,7 +809,8 @@ public class DeliveryOrderManager : MonoBehaviour
         GameEventManager.ReportAiActivity(
             captured
                 ? $"Captured a {previousOwner} territory with a {delivery.grams} g delivery."
-                : $"Completed a {delivery.grams} g delivery for {delivery.reward} €.");
+                : $"Completed a {delivery.grams} g delivery for {delivery.reward} €.",
+            captured ? "🏴" : "💰");
         activeAiDeliveries.Remove(delivery);
     }
 
@@ -890,7 +902,7 @@ public class DeliveryOrderManager : MonoBehaviour
             Rect rect = new Rect(screen.x - 55f, Screen.height - screen.y - 15f, 110f, 30f);
             string territoryLabel = order.territoryOwner == TerritoryOwner.Player
                 ? "SAFE"
-                : order.territoryOwner == TerritoryOwner.AI ? "RIVAL" : "NEUTRAL";
+                : order.territoryOwner == TerritoryOwner.AI ? "VOLKOV" : "NEUTRAL";
             if (GUI.Button(rect, $"{territoryLabel} {i + 1}"))
             {
                 OpenOrder(i);

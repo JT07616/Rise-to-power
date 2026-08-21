@@ -7,15 +7,25 @@ public class TerritoryDistrictManager : MonoBehaviour
     {
         public TerritoryOwner owner;
         public int controlScore;
+        public Vector3 center;
         public readonly List<TerritoryHouse> houses = new List<TerritoryHouse>();
     }
 
     private static TerritoryDistrictManager instance;
+    private static readonly string[] DistrictNames =
+    {
+        "Downtown",
+        "Grove Street",
+        "Industrial Zone",
+        "Old Town",
+        "Riverside",
+        "Uptown"
+    };
 
     [Header("District control")]
     [Min(1)] public int columns = 3;
     [Min(1)] public int rows = 2;
-    [Min(1)] public int deliveriesToCapture = 5;
+    [Min(1)] public int deliveriesToCapture = 3;
 
     private readonly Dictionary<int, District> districts = new Dictionary<int, District>();
     private Vector2 minimumPosition;
@@ -62,11 +72,16 @@ public class TerritoryDistrictManager : MonoBehaviour
                 districts.Add(id, district);
             }
             district.houses.Add(house);
+            district.center += house.transform.position;
         }
 
         foreach (District district in districts.Values)
         {
             district.owner = GetMajorityOwner(district.houses);
+            district.controlScore = district.owner == TerritoryOwner.Player
+                ? deliveriesToCapture
+                : district.owner == TerritoryOwner.AI ? -deliveriesToCapture : 0;
+            district.center /= district.houses.Count;
             foreach (TerritoryHouse house in district.houses)
             {
                 house.SetOwner(district.owner);
@@ -84,11 +99,13 @@ public class TerritoryDistrictManager : MonoBehaviour
             return false;
         }
 
-        if (!instance.districts.TryGetValue(instance.GetDistrictId(house.transform.position), out District district))
+        int districtId = instance.GetDistrictId(house.transform.position);
+        if (!instance.districts.TryGetValue(districtId, out District district))
         {
             return false;
         }
 
+        int previousScore = district.controlScore;
         district.controlScore += side == TerritoryOwner.Player ? 1 : -1;
         district.controlScore = Mathf.Clamp(
             district.controlScore,
@@ -96,46 +113,130 @@ public class TerritoryDistrictManager : MonoBehaviour
             instance.deliveriesToCapture);
 
         TerritoryOwner previousOwner = district.owner;
-        if (district.controlScore >= instance.deliveriesToCapture)
-        {
-            district.owner = TerritoryOwner.Player;
-        }
-        else if (district.controlScore <= -instance.deliveriesToCapture)
-        {
-            district.owner = TerritoryOwner.AI;
-        }
+        district.owner = district.controlScore > 0
+            ? TerritoryOwner.Player
+            : district.controlScore < 0 ? TerritoryOwner.AI : TerritoryOwner.Neutral;
 
         if (district.owner != previousOwner)
         {
-            captured = district.owner == side;
             foreach (TerritoryHouse districtHouse in district.houses)
             {
                 districtHouse.SetOwner(district.owner);
             }
         }
 
+        captured = side == TerritoryOwner.Player
+            ? previousScore < instance.deliveriesToCapture &&
+              district.controlScore == instance.deliveriesToCapture
+            : previousScore > -instance.deliveriesToCapture &&
+              district.controlScore == -instance.deliveriesToCapture;
+        GameStoryManager.ReportTerritoryDelivery(
+            side,
+            previousScore,
+            district.controlScore,
+            captured);
+        string territoryMessage = captured
+            ? $"Captured {GetDistrictName(districtId)} at {district.controlScore:+0;-0;0}."
+            : $"{GetDistrictName(districtId)} control {previousScore:+0;-0;0} → {district.controlScore:+0;-0;0}.";
+        if (side == TerritoryOwner.Player)
+        {
+            GameEventManager.ReportPlayerActivity(captured ? "🏴" : "🗺️", territoryMessage);
+        }
+        else
+        {
+            GameEventManager.ReportAiActivity(territoryMessage, captured ? "🏴" : "🗺️");
+        }
         return true;
     }
 
-    public static bool TryGetProgress(TerritoryHouse house, TerritoryOwner side, out int progress, out int requirement)
+    public static int DistrictSlotCount
     {
-        progress = 0;
-        requirement = 0;
-        if (instance == null || !instance.initialized || house == null || side == TerritoryOwner.Neutral ||
-            !instance.districts.TryGetValue(instance.GetDistrictId(house.transform.position), out District district))
+        get { return instance != null ? instance.columns * instance.rows : 0; }
+    }
+
+    public static bool TryGetDistrictStatus(
+        int districtId,
+        out string districtName,
+        out int controlScore,
+        out int controlLimit,
+        out TerritoryOwner owner,
+        out Vector3 center)
+    {
+        districtName = GetDistrictName(districtId);
+        controlScore = 0;
+        controlLimit = instance != null ? instance.deliveriesToCapture : 3;
+        owner = TerritoryOwner.Neutral;
+        center = Vector3.zero;
+        if (instance == null || !instance.initialized ||
+            !instance.districts.TryGetValue(districtId, out District district))
         {
             return false;
         }
 
-        if (district.owner == side)
+        controlScore = district.controlScore;
+        owner = district.owner;
+        center = district.center;
+        return true;
+    }
+
+    public static bool TryGetDistrictStatus(
+        TerritoryHouse house,
+        out string districtName,
+        out int controlScore,
+        out int controlLimit)
+    {
+        districtName = "Unknown district";
+        controlScore = 0;
+        controlLimit = instance != null ? instance.deliveriesToCapture : 3;
+        if (instance == null || !instance.initialized || house == null)
         {
-            return true;
+            return false;
         }
 
-        requirement = instance.deliveriesToCapture;
-        progress = side == TerritoryOwner.Player
-            ? Mathf.Max(0, district.controlScore)
-            : Mathf.Max(0, -district.controlScore);
+        int districtId = instance.GetDistrictId(house.transform.position);
+        return TryGetDistrictStatus(
+            districtId,
+            out districtName,
+            out controlScore,
+            out controlLimit,
+            out _,
+            out _);
+    }
+
+    public static bool TryGetDistrictBounds(
+        int districtId,
+        out Vector3 boundsMinimum,
+        out Vector3 boundsMaximum)
+    {
+        boundsMinimum = Vector3.zero;
+        boundsMaximum = Vector3.zero;
+        if (instance == null || !instance.initialized ||
+            !instance.districts.ContainsKey(districtId))
+        {
+            return false;
+        }
+
+        int column = districtId % instance.columns;
+        int row = districtId / instance.columns;
+        float minimumX = Mathf.Lerp(
+            instance.minimumPosition.x,
+            instance.maximumPosition.x,
+            column / (float)instance.columns);
+        float maximumX = Mathf.Lerp(
+            instance.minimumPosition.x,
+            instance.maximumPosition.x,
+            (column + 1f) / instance.columns);
+        float minimumZ = Mathf.Lerp(
+            instance.minimumPosition.y,
+            instance.maximumPosition.y,
+            row / (float)instance.rows);
+        float maximumZ = Mathf.Lerp(
+            instance.minimumPosition.y,
+            instance.maximumPosition.y,
+            (row + 1f) / instance.rows);
+
+        boundsMinimum = new Vector3(minimumX, 0f, minimumZ);
+        boundsMaximum = new Vector3(maximumX, 0f, maximumZ);
         return true;
     }
 
@@ -148,16 +249,35 @@ public class TerritoryDistrictManager : MonoBehaviour
         return row * columns + column;
     }
 
+    private static string GetDistrictName(int districtId)
+    {
+        return districtId >= 0 && districtId < DistrictNames.Length
+            ? DistrictNames[districtId]
+            : $"District {districtId + 1}";
+    }
+
     private static TerritoryOwner GetMajorityOwner(List<TerritoryHouse> houses)
     {
         int player = 0;
         int rival = 0;
+        int neutral = 0;
         foreach (TerritoryHouse house in houses)
         {
             if (house.Owner == TerritoryOwner.Player) player++;
             else if (house.Owner == TerritoryOwner.AI) rival++;
+            else neutral++;
         }
 
-        return player > rival ? TerritoryOwner.Player : rival > player ? TerritoryOwner.AI : TerritoryOwner.Neutral;
+        if (player > rival && player > neutral)
+        {
+            return TerritoryOwner.Player;
+        }
+
+        if (rival > player && rival > neutral)
+        {
+            return TerritoryOwner.AI;
+        }
+
+        return TerritoryOwner.Neutral;
     }
 }

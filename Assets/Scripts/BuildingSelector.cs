@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
@@ -13,6 +15,7 @@ public class BuildingSelector : MonoBehaviour
     private BuildingInfo hoveredBuilding;
     private BuildingInfo selectedBuilding;
     private BuildingInfo[] labeledBuildings;
+    private Texture2D shortcutButtonTexture;
 
     void Awake()
     {
@@ -34,6 +37,11 @@ public class BuildingSelector : MonoBehaviour
         if (instance == this)
         {
             instance = null;
+        }
+
+        if (shortcutButtonTexture != null)
+        {
+            Destroy(shortcutButtonTexture);
         }
     }
 
@@ -82,11 +90,29 @@ public class BuildingSelector : MonoBehaviour
         {
             Vector2 pointerPosition = Mouse.current.position.ReadValue();
             if (!IsPointerOverMapLabel(pointerPosition) &&
-                !DeliveryOrderManager.IsPointerOverMapLabel(pointerPosition))
+                !DeliveryOrderManager.IsPointerOverMapLabel(pointerPosition) &&
+                !IsPointerOverShortcutBar(pointerPosition))
             {
                 HandleClick();
             }
         }
+    }
+
+    public static bool IsPointerOverShortcutBar(Vector2 screenPosition)
+    {
+        if (instance == null || instance.labeledBuildings == null)
+        {
+            return false;
+        }
+
+        int shortcutCount = instance.GetShortcutBuildings().Count;
+        if (shortcutCount == 0)
+        {
+            return false;
+        }
+
+        Vector2 guiPosition = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
+        return GetShortcutBarRect(shortcutCount).Contains(guiPosition);
     }
 
     public static bool IsPointerOverMapLabel(Vector2 screenPosition)
@@ -213,7 +239,185 @@ public class BuildingSelector : MonoBehaviour
             }
         }
 
+        DrawBuildingShortcuts();
+
         GUI.depth = previousDepth;
+    }
+
+    void DrawBuildingShortcuts()
+    {
+        List<BuildingInfo> buildings = GetShortcutBuildings();
+        if (buildings.Count == 0)
+        {
+            return;
+        }
+
+        if (shortcutButtonTexture == null)
+        {
+            shortcutButtonTexture = CreateShortcutButtonTexture();
+        }
+
+        Rect bar = GetShortcutBarRect(buildings.Count);
+        const float buttonSize = 50f;
+        const float gap = 10f;
+        GUIStyle buttonStyle = new GUIStyle(GUIStyle.none)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 11,
+            fontStyle = FontStyle.Bold,
+            normal = { textColor = Color.white },
+            hover = { textColor = Color.white },
+            active = { textColor = Color.white }
+        };
+        GUIStyle tooltipStyle = new GUIStyle(GUI.skin.box)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 11
+        };
+
+        for (int i = 0; i < buildings.Count; i++)
+        {
+            BuildingInfo building = buildings[i];
+            Rect buttonRect = new Rect(
+                bar.x + i * (buttonSize + gap),
+                bar.y,
+                buttonSize,
+                buttonSize);
+            bool hovered = buttonRect.Contains(Event.current.mousePosition);
+            Color previousColor = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.72f);
+            GUI.DrawTexture(
+                new Rect(buttonRect.x + 2f, buttonRect.y + 3f, buttonSize, buttonSize),
+                shortcutButtonTexture);
+            GUI.color = hovered
+                ? new Color(0.2f, 0.75f, 1f, 1f)
+                : new Color(0.1f, 0.38f, 0.72f, 0.96f);
+            GUI.DrawTexture(buttonRect, shortcutButtonTexture);
+            GUI.color = previousColor;
+
+            if (GUI.Button(buttonRect, GetBuildingShortcut(building), buttonStyle) &&
+                Vector2.Distance(Event.current.mousePosition, buttonRect.center) <= buttonSize * 0.5f)
+            {
+                FocusOnly(building);
+            }
+
+            if (hovered)
+            {
+                GUI.Box(
+                    new Rect(buttonRect.center.x - 75f, buttonRect.y - 30f, 150f, 24f),
+                    building.buildingName,
+                    tooltipStyle);
+            }
+        }
+    }
+
+    List<BuildingInfo> GetShortcutBuildings()
+    {
+        List<BuildingInfo> buildings = new List<BuildingInfo>();
+        foreach (BuildingInfo building in labeledBuildings)
+        {
+            if (building != null && IsLabeledBuilding(building))
+            {
+                buildings.Add(building);
+            }
+        }
+
+        buildings.Sort((left, right) =>
+        {
+            int roleComparison = GetShortcutOrder(left).CompareTo(GetShortcutOrder(right));
+            return roleComparison != 0
+                ? roleComparison
+                : string.Compare(left.buildingName, right.buildingName, StringComparison.Ordinal);
+        });
+        return buildings;
+    }
+
+    static Rect GetShortcutBarRect(int shortcutCount)
+    {
+        const float buttonSize = 50f;
+        const float gap = 10f;
+        float width = shortcutCount * buttonSize + (shortcutCount - 1) * gap;
+        return new Rect((Screen.width - width) * 0.5f, Screen.height - buttonSize - 12f, width, buttonSize);
+    }
+
+    static int GetShortcutOrder(BuildingInfo building)
+    {
+        switch (building.buildingRole)
+        {
+            case BuildingRole.Factory:
+                return 0;
+            case BuildingRole.Warehouse:
+                return 1;
+            case BuildingRole.WorkerContact:
+                return 2;
+            case BuildingRole.CorruptOfficer:
+                return 4;
+            default:
+                return building.buildingName == "Apartment" ? 3 : 5;
+        }
+    }
+
+    static string GetBuildingShortcut(BuildingInfo building)
+    {
+        if (building.buildingName == "Apartment")
+        {
+            return "APT";
+        }
+
+        if (building.buildingName == "Police Station")
+        {
+            return "POL";
+        }
+
+        switch (building.buildingRole)
+        {
+            case BuildingRole.Factory:
+                return "FAC";
+            case BuildingRole.Warehouse:
+                return "WH";
+            case BuildingRole.WorkerContact:
+                return "WRK";
+            case BuildingRole.CorruptOfficer:
+                return "CROSS";
+            default:
+                return "LOC";
+        }
+    }
+
+    Texture2D CreateShortcutButtonTexture()
+    {
+        const int size = 64;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            name = "BuildingShortcutButton",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        Color[] pixels = new Color[size * size];
+        Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+        float radius = size * 0.5f - 1f;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float edge = radius - Vector2.Distance(new Vector2(x, y), center);
+                pixels[y * size + x] = new Color(1f, 1f, 1f, Mathf.Clamp01(edge));
+            }
+        }
+        texture.SetPixels(pixels);
+        texture.Apply();
+        return texture;
+    }
+
+    void FocusOnly(BuildingInfo building)
+    {
+        SimpleStrategyCamera camera = mainCamera != null
+            ? mainCamera.GetComponent<SimpleStrategyCamera>()
+            : null;
+        if (camera != null)
+        {
+            camera.FocusOn(building.LabelPosition, null);
+        }
     }
 
     void FocusAndShow(BuildingInfo building)
@@ -260,7 +464,7 @@ public class BuildingSelector : MonoBehaviour
 
     static bool IsLabeledBuilding(BuildingInfo building)
     {
-        return building != null &&
+        return building != null && !building.IsStoryLocked &&
                (building.buildingRole != BuildingRole.General ||
                 building.buildingName == "Apartment" ||
                 building.buildingName == "Police Station");
@@ -287,7 +491,7 @@ public class BuildingSelector : MonoBehaviour
             case BuildingRole.Warehouse:
                 return "WAREHOUSE";
             case BuildingRole.CorruptOfficer:
-                return "CORRUPT OFFICER";
+                return "LEDGER CROSS";
             default:
                 return "BUILDING";
         }
@@ -304,7 +508,8 @@ public class BuildingSelector : MonoBehaviour
 
         if (Physics.Raycast(ray, out RaycastHit hit, 500f, clickableLayers))
         {
-            return hit.collider.GetComponentInParent<BuildingInfo>();
+            BuildingInfo building = hit.collider.GetComponentInParent<BuildingInfo>();
+            return building != null && !building.IsStoryLocked ? building : null;
         }
 
         return null;

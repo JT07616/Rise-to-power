@@ -38,6 +38,13 @@ public class SimpleStrategyCamera : MonoBehaviour
     private float currentYaw;
     private float currentPitch;
     private Action onFocusCompleted;
+    private bool isFocusing;
+    private float timeScaleBeforeFocus = 1f;
+
+    public bool IsFocusing
+    {
+        get { return isFocusing; }
+    }
 
     void Start()
     {
@@ -82,7 +89,7 @@ public class SimpleStrategyCamera : MonoBehaviour
             return;
         }
 
-        if (onFocusCompleted == null)
+        if (!isFocusing)
         {
             HandleZoom();
             HandleClickMove();
@@ -93,17 +100,18 @@ public class SimpleStrategyCamera : MonoBehaviour
         targetPosition.y = Mathf.Clamp(targetPosition.y, minHeight, maxHeight);
         targetPosition.z = Mathf.Clamp(targetPosition.z, minZ, maxZ);
 
-        if (onFocusCompleted != null)
+        if (isFocusing)
         {
+            float focusDeltaTime = Time.unscaledDeltaTime;
             transform.position = Vector3.MoveTowards(
                 transform.position,
                 targetPosition,
-                focusMoveSpeed * Time.deltaTime
+                focusMoveSpeed * focusDeltaTime
             );
             transform.rotation = Quaternion.RotateTowards(
                 transform.rotation,
                 targetRotation,
-                focusRotationSpeed * Time.deltaTime
+                focusRotationSpeed * focusDeltaTime
             );
         }
         else
@@ -115,13 +123,15 @@ public class SimpleStrategyCamera : MonoBehaviour
             );
         }
 
-        if (onFocusCompleted != null &&
+        if (isFocusing &&
             Vector3.Distance(transform.position, targetPosition) <= 0.5f &&
             Quaternion.Angle(transform.rotation, targetRotation) <= 0.5f)
         {
             Action completed = onFocusCompleted;
             onFocusCompleted = null;
-            completed.Invoke();
+            isFocusing = false;
+            RestoreTimeAfterFocus();
+            completed?.Invoke();
         }
     }
 
@@ -153,14 +163,42 @@ public class SimpleStrategyCamera : MonoBehaviour
         Vector3 focusAngles = targetRotation.eulerAngles;
         currentYaw = focusAngles.y;
         currentPitch = focusAngles.x > 180f ? focusAngles.x - 360f : focusAngles.x;
+
+        if (!isFocusing)
+        {
+            timeScaleBeforeFocus = Time.timeScale;
+            Time.timeScale = 0f;
+        }
+
+        isFocusing = true;
         onFocusCompleted = onCompleted;
     }
 
     public void CancelFocus()
     {
+        if (isFocusing)
+        {
+            isFocusing = false;
+            RestoreTimeAfterFocus();
+        }
+
         onFocusCompleted = null;
         targetPosition = transform.position;
         targetRotation = transform.rotation;
+    }
+
+    void OnDisable()
+    {
+        if (isFocusing)
+        {
+            isFocusing = false;
+            RestoreTimeAfterFocus();
+        }
+    }
+
+    void RestoreTimeAfterFocus()
+    {
+        Time.timeScale = timeScaleBeforeFocus;
     }
 
     void HandleZoom()
@@ -191,6 +229,7 @@ public class SimpleStrategyCamera : MonoBehaviour
 
         Vector2 pointerPosition = Mouse.current.position.ReadValue();
         if (BuildingSelector.IsPointerOverMapLabel(pointerPosition) ||
+            BuildingSelector.IsPointerOverShortcutBar(pointerPosition) ||
             DeliveryOrderManager.IsPointerOverMapLabel(pointerPosition))
         {
             return;

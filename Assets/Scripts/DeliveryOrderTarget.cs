@@ -18,38 +18,26 @@ public class DeliveryOrderTarget : MonoBehaviour
         }
     }
 
-    public int CompletedDeliveryCount
+    public bool TryGetDistrictControl(
+        out string districtName,
+        out int controlScore,
+        out int controlLimit)
     {
-        get
+        TerritoryHouse house = GetTerritoryHouse(false);
+        if (TerritoryDistrictManager.TryGetDistrictStatus(
+                house,
+                out districtName,
+                out controlScore,
+                out controlLimit))
         {
-            TerritoryHouse house = GetTerritoryHouse(false);
-            if (TerritoryDistrictManager.TryGetProgress(
-                    house,
-                    TerritoryOwner.Player,
-                    out int progress,
-                    out _))
-            {
-                return progress;
-            }
-            return house != null ? house.GetCaptureProgress(TerritoryOwner.Player) : 0;
+            return true;
         }
-    }
 
-    public int PlayerCaptureRequirement
-    {
-        get
-        {
-            TerritoryHouse house = GetTerritoryHouse(false);
-            if (TerritoryDistrictManager.TryGetProgress(
-                    house,
-                    TerritoryOwner.Player,
-                    out _,
-                    out int requirement))
-            {
-                return requirement;
-            }
-            return house != null ? house.GetCaptureRequirement(TerritoryOwner.Player) : 6;
-        }
+        districtName = "Unknown district";
+        controlScore = house != null && house.IsPlayerOwned ? 3 :
+            house != null && house.IsAiOwned ? -3 : 0;
+        controlLimit = 3;
+        return false;
     }
 
     public void Configure(DeliveryOrderManager orderOwner, int index)
@@ -218,8 +206,8 @@ public class AiFacilityMarker : MonoBehaviour
         }
 
         string label = role == AiFacilityRole.WorkerContact
-            ? "RIVAL WORKERS"
-            : $"RIVAL {role.ToString().ToUpperInvariant()}";
+            ? "VOLKOV WORKERS"
+            : $"VOLKOV {role.ToString().ToUpperInvariant()}";
         Rect rect = new Rect(screen.x - 65f, Screen.height - screen.y - 15f, 130f, 30f);
         Color previousColor = GUI.color;
         GUI.color = new Color(1f, 0.45f, 0.45f);
@@ -289,6 +277,7 @@ public class TerritoryHouse : MonoBehaviour
 
         if (TerritoryDistrictManager.TryRegisterDelivery(this, side, out bool districtCaptured))
         {
+            GameEventManager.RefreshTerritoryInfluence();
             return districtCaptured;
         }
 
