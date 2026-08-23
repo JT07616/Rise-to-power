@@ -12,6 +12,37 @@ public class BuildingPopupUI : MonoBehaviour
     public TMP_Text titleText;
     public TMP_Text descriptionText;
 
+    [Header("Background")]
+    public Image backgroundImage;
+    public Sprite defaultBackground;
+    public Sprite corruptOfficerBackground;
+
+    [Header("Close button")]
+    public Sprite closeButtonSprite;
+
+    [Header("Factory action buttons")]
+    public Texture2D factoryProduceButtonImage;
+    public Texture2D factoryMoveButtonImage;
+    public Texture2D warehouseMoveButtonImage;
+    public Texture2D factoryUpgradeButtonImage;
+
+    [Header("Corrupt officer action buttons")]
+    public Texture2D corruptOfficerTrustButtonImage;
+    public Texture2D corruptOfficerProtectionButtonImage;
+    public Texture2D corruptOfficerBribeButtonImage;
+
+    [Header("First contact action buttons")]
+    public Texture2D hireWorkerButtonImage;
+    public Texture2D fireWorkerButtonImage;
+    public Texture2D callInFavorButtonImage;
+
+    [Header("Apartment action buttons")]
+    public Texture2D buyApartmentButtonImage;
+    public Texture2D layLowButtonImage;
+
+    [Header("Police station action buttons")]
+    public Texture2D policeAmbushButtonImage;
+
     [Header("Audio")]
     public AudioSource uiAudioSource;
     public AudioClip popupOpenSound;
@@ -26,11 +57,30 @@ public class BuildingPopupUI : MonoBehaviour
 
     void Start()
     {
+        if (backgroundImage == null && panel != null)
+        {
+            backgroundImage = panel.GetComponent<Image>();
+        }
+
         panel.SetActive(false);
         IsAnyOpen = false;
 
         if (closeButton != null)
         {
+            if (closeButton.image != null && closeButtonSprite != null)
+            {
+                closeButton.image.sprite = closeButtonSprite;
+                closeButton.image.type = Image.Type.Simple;
+                closeButton.image.preserveAspect = true;
+                closeButton.image.color = Color.white;
+            }
+
+            TMP_Text closeButtonText = closeButton.GetComponentInChildren<TMP_Text>();
+            if (closeButtonText != null)
+            {
+                closeButtonText.text = "";
+            }
+
             closeButton.onClick.AddListener(ClosePanel);
         }
     }
@@ -52,6 +102,7 @@ public class BuildingPopupUI : MonoBehaviour
 
         titleText.text = building.buildingName;
         currentBuilding = building;
+        RefreshBackground();
         RefreshText();
 
         panel.SetActive(true);
@@ -105,17 +156,17 @@ public class BuildingPopupUI : MonoBehaviour
 
         if (isPoliceStation)
         {
-            GUI.enabled = AmbushTrapManager.CanPlayerSetAmbush;
-            if (GUI.Button(
+            if (DrawActionButton(
                     new Rect(x, y, buttonWidth, buttonHeight),
-                    AmbushTrapManager.GetPlayerAmbushButtonLabel()))
+                    AmbushTrapManager.GetPlayerAmbushButtonLabel(),
+                    policeAmbushButtonImage,
+                    AmbushTrapManager.CanPlayerSetAmbush))
             {
                 PlayButtonClick();
                 AmbushTrapManager.TrySetPlayerAmbush();
                 RefreshText();
             }
 
-            GUI.enabled = true;
             return;
         }
 
@@ -123,58 +174,76 @@ public class BuildingPopupUI : MonoBehaviour
         {
             if (!currentBuilding.IsUnlocked())
             {
-                GUI.enabled = currentBuilding.CanPurchase();
-                if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetPurchaseButtonLabel()))
+                if (DrawActionButton(
+                        new Rect(x, y, buttonWidth, buttonHeight),
+                        currentBuilding.GetPurchaseButtonLabel(),
+                        corruptOfficerTrustButtonImage,
+                        currentBuilding.CanPurchase()))
                 {
                     PlayButtonClick();
                     currentBuilding.Purchase();
                     RefreshText();
                 }
 
-                GUI.enabled = true;
                 return;
             }
 
-            GUI.enabled = currentBuilding.CanBuyRiskProtection();
-            if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetRiskProtectionButtonLabel()))
+            if (DrawActionButton(
+                    new Rect(x, y, buttonWidth, buttonHeight),
+                    currentBuilding.GetRiskProtectionButtonLabel(),
+                    corruptOfficerProtectionButtonImage,
+                    currentBuilding.CanBuyRiskProtection()))
             {
                 PlayButtonClick();
                 currentBuilding.BuyRiskProtection();
                 RefreshText();
             }
 
-            GUI.enabled = currentBuilding.CanBuyRaidBribe();
             float raidButtonX = x + buttonWidth + gap;
-            if (GUI.Button(new Rect(raidButtonX, y, buttonWidth, buttonHeight), currentBuilding.GetRaidBribeButtonLabel()))
+            if (DrawActionButton(
+                    new Rect(raidButtonX, y, buttonWidth, buttonHeight),
+                    currentBuilding.GetRaidBribeButtonLabel(),
+                    corruptOfficerBribeButtonImage,
+                    currentBuilding.CanBuyRaidBribe()))
             {
                 PlayButtonClick();
                 currentBuilding.BuyRaidBribe();
                 RefreshText();
             }
 
-            GUI.enabled = true;
             return;
         }
 
         if (!currentBuilding.IsUnlocked())
         {
-            GUI.enabled = currentBuilding.CanPurchase();
-            if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetPurchaseButtonLabel()))
+            Texture2D purchaseButtonImage = currentBuilding.buildingName == "Apartment"
+                ? buyApartmentButtonImage
+                : null;
+            if (DrawActionButton(
+                    new Rect(x, y, buttonWidth, buttonHeight),
+                    currentBuilding.GetPurchaseButtonLabel(),
+                    purchaseButtonImage,
+                    currentBuilding.CanPurchase()))
             {
                 PlayButtonClick();
                 currentBuilding.Purchase();
                 RefreshText();
             }
 
-            GUI.enabled = true;
             return;
         }
 
         int buttonIndex = 0;
         if (currentBuilding.producesGoods)
         {
-            GUI.enabled = currentBuilding.CanProduceGoods();
-            if (GUI.Button(new Rect(x, y, buttonWidth, buttonHeight), currentBuilding.GetProduceGoodsButtonLabel()))
+            Texture2D buttonImage = currentBuilding.buildingRole == BuildingRole.Factory
+                ? factoryProduceButtonImage
+                : null;
+            if (DrawActionButton(
+                    new Rect(x, y, buttonWidth, buttonHeight),
+                    currentBuilding.GetProduceGoodsButtonLabel(),
+                    buttonImage,
+                    currentBuilding.CanProduceGoods()))
             {
                 PlayButtonClick();
                 currentBuilding.StartGoodsProduction();
@@ -186,9 +255,15 @@ public class BuildingPopupUI : MonoBehaviour
         if (currentBuilding.buildingRole == BuildingRole.Factory ||
             currentBuilding.buildingRole == BuildingRole.Warehouse)
         {
-            GUI.enabled = currentBuilding.CanMoveGoods();
             float buttonX = x + buttonIndex * (buttonWidth + gap);
-            if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetMoveGoodsButtonLabel()))
+            Texture2D buttonImage = currentBuilding.buildingRole == BuildingRole.Factory
+                ? factoryMoveButtonImage
+                : warehouseMoveButtonImage;
+            if (DrawActionButton(
+                    new Rect(buttonX, y, buttonWidth, buttonHeight),
+                    currentBuilding.GetMoveGoodsButtonLabel(),
+                    buttonImage,
+                    currentBuilding.CanMoveGoods()))
             {
                 PlayButtonClick();
                 currentBuilding.MoveGoodsToWarehouse();
@@ -199,9 +274,15 @@ public class BuildingPopupUI : MonoBehaviour
 
         if (currentBuilding.showIncreaseAction)
         {
-            GUI.enabled = currentBuilding.CanIncreaseProduction();
             float buttonX = x + buttonIndex * (buttonWidth + gap);
-            if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetIncreaseButtonLabel()))
+            Texture2D buttonImage = currentBuilding.buildingRole == BuildingRole.WorkerContact
+                ? hireWorkerButtonImage
+                : currentBuilding.buildingName == "Apartment" ? layLowButtonImage : null;
+            if (DrawActionButton(
+                    new Rect(buttonX, y, buttonWidth, buttonHeight),
+                    currentBuilding.GetIncreaseButtonLabel(),
+                    buttonImage,
+                    currentBuilding.CanIncreaseProduction()))
             {
                 PlayButtonClick();
                 currentBuilding.IncreaseProduction();
@@ -212,9 +293,15 @@ public class BuildingPopupUI : MonoBehaviour
 
         if (currentBuilding.showDecreaseAction)
         {
-            GUI.enabled = currentBuilding.CanDecreaseProduction();
             float buttonX = x + buttonIndex * (buttonWidth + gap);
-            if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetDecreaseButtonLabel()))
+            Texture2D buttonImage = currentBuilding.buildingRole == BuildingRole.WorkerContact
+                ? fireWorkerButtonImage
+                : null;
+            if (DrawActionButton(
+                    new Rect(buttonX, y, buttonWidth, buttonHeight),
+                    currentBuilding.GetDecreaseButtonLabel(),
+                    buttonImage,
+                    currentBuilding.CanDecreaseProduction()))
             {
                 PlayButtonClick();
                 currentBuilding.DecreaseProduction();
@@ -225,9 +312,12 @@ public class BuildingPopupUI : MonoBehaviour
 
         if (currentBuilding.buildingRole == BuildingRole.WorkerContact)
         {
-            GUI.enabled = currentBuilding.CanBuyEmergencyAction();
             float buttonX = x + buttonIndex * (buttonWidth + gap);
-            if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetEmergencyActionButtonLabel()))
+            if (DrawActionButton(
+                    new Rect(buttonX, y, buttonWidth, buttonHeight),
+                    currentBuilding.GetEmergencyActionButtonLabel(),
+                    callInFavorButtonImage,
+                    currentBuilding.CanBuyEmergencyAction()))
             {
                 PlayButtonClick();
                 currentBuilding.BuyEmergencyAction();
@@ -238,9 +328,12 @@ public class BuildingPopupUI : MonoBehaviour
 
         if (currentBuilding.hasUpgrade)
         {
-            GUI.enabled = currentBuilding.CanUpgrade();
             float buttonX = x + buttonIndex * (buttonWidth + gap);
-            if (GUI.Button(new Rect(buttonX, y, buttonWidth, buttonHeight), currentBuilding.GetUpgradeButtonLabel()))
+            if (DrawActionButton(
+                    new Rect(buttonX, y, buttonWidth, buttonHeight),
+                    currentBuilding.GetUpgradeButtonLabel(),
+                    factoryUpgradeButtonImage,
+                    currentBuilding.CanUpgrade()))
             {
                 PlayButtonClick();
                 currentBuilding.Upgrade();
@@ -249,6 +342,25 @@ public class BuildingPopupUI : MonoBehaviour
         }
 
         GUI.enabled = true;
+    }
+
+    private bool DrawActionButton(Rect rect, string label, Texture2D image, bool enabled)
+    {
+        if (image == null)
+        {
+            GUI.enabled = enabled;
+            bool clicked = GUI.Button(rect, label);
+            GUI.enabled = true;
+            return clicked;
+        }
+
+        Color previousColor = GUI.color;
+        GUI.color = enabled ? Color.white : new Color(0.4f, 0.4f, 0.4f, 0.8f);
+        GUI.DrawTexture(rect, image, ScaleMode.StretchToFill, true);
+        GUI.color = previousColor;
+
+        GUI.enabled = true;
+        return enabled && GUI.Button(rect, GUIContent.none, GUIStyle.none);
     }
 
     private int GetActionButtonCount()
@@ -333,6 +445,27 @@ public class BuildingPopupUI : MonoBehaviour
         }
 
         descriptionText.text = currentBuilding.GetFullDescription();
+    }
+
+    private void RefreshBackground()
+    {
+        if (backgroundImage == null || currentBuilding == null)
+        {
+            return;
+        }
+
+        Sprite background = currentBuilding.buildingRole == BuildingRole.CorruptOfficer
+            ? corruptOfficerBackground
+            : defaultBackground;
+        if (background == null)
+        {
+            return;
+        }
+
+        backgroundImage.sprite = background;
+        backgroundImage.type = Image.Type.Simple;
+        backgroundImage.preserveAspect = false;
+        backgroundImage.color = Color.white;
     }
 
     private void PlayPopupOpen()

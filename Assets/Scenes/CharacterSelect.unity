@@ -587,8 +587,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 20
-  m_fontSizeBase: 20
+  m_fontSize: 24
+  m_fontSizeBase: 24
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -774,7 +774,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: cb021afa023f31146b601279632b3042, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 314369c76d0431149a28c3adab8b3041, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -939,7 +939,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CharacterSelect
   nameInput: {fileID: 1975900227}
   sceneToLoad: NewSampleScene
-  selectedColor: {r: 0, g: 1, b: 0, a: 1}
+  selectedColor: {r: 0, g: 0.12941177, b: 0.8039216, a: 1}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   uiAudioSource: {fileID: 1201383670}
   buttonClickSound: {fileID: 8300000, guid: 193b7d116cdfd5846bd97c0c208a2ca2, type: 3}
@@ -1243,14 +1243,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.972549, g: 0.07864004, b: 0.07864004, a: 0.8980392}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: fb54eeda1d9e781429d1e6b0367934f1, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 93c51271dd3170e4288dacc02b5ba7ea, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -1334,8 +1334,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 20
-  m_fontSizeBase: 20
+  m_fontSize: 24
+  m_fontSizeBase: 24
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1541,7 +1541,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 824666e86c0a03b44b3f9559c8ef9f67, type: 3}
+  m_Sprite: {fileID: 21300000, guid: cecb9c7205f41c946a6c1a8fcd110e7c, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -1654,7 +1654,7 @@ MonoBehaviour:
   m_HideSoftKeyboard: 0
   m_CharacterValidation: 0
   m_RegexValue: 
-  m_GlobalPointSize: 20
+  m_GlobalPointSize: 24
   m_CharacterLimit: 0
   m_OnEndEdit:
     m_PersistentCalls:
@@ -1718,7 +1718,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: e6490552c8e88904999404d20aed99fe, type: 3}
+  m_Sprite: {fileID: 21300000, guid: bb9200fa4b41bfc41a7c0d816ee5dc65, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -1889,7 +1889,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: f1de9e69694f76f499e0b653f3aa9b26, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 1809529795953c845b2a414e57075280, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1

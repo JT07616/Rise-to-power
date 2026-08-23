@@ -81148,6 +81148,12 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   popupUI: {fileID: 1975835260}
+  corruptOfficerShortcutImage: {fileID: 2800000, guid: 469c711e86effeb42b672d36ff6dac5f, type: 3}
+  warehouseShortcutImage: {fileID: 2800000, guid: 782cd5520792c5649b4dc7b1569f503f, type: 3}
+  policeStationShortcutImage: {fileID: 2800000, guid: 8b28d55df6b9fe74f9eb955c66480475, type: 3}
+  factoryShortcutImage: {fileID: 2800000, guid: b8a69e3efa7ba2f48b490d6f14163302, type: 3}
+  apartmentShortcutImage: {fileID: 2800000, guid: 1b4d16b37da1d644fb4b853377d1d3de, type: 3}
+  workerContactShortcutImage: {fileID: 2800000, guid: 8ca181a8232cca6468c47fb265b201e4, type: 3}
 --- !u!114 &340323362
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -219278,6 +219284,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
   buildingName: Corrupt Officer
   buildingRole: 4
+  mapLabelImagesByUpgradeLevel:
+  - {fileID: 2800000, guid: 231ef9fa08187d04399258b1a0816558, type: 3}
   description: You meet a corrupt officer here, away from the station and anyone
     who might recognize either of you.
   hasProductionControls: 1
@@ -238940,6 +238948,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
   buildingName: Storefront
   buildingRole: 3
+  mapLabelImagesByUpgradeLevel:
+  - {fileID: 2800000, guid: fddb0ea5313be6b4ab50a2861605bafc, type: 3}
+  - {fileID: 2800000, guid: c6db7d5ac24fa09439c93d35ee80d889, type: 3}
+  - {fileID: 2800000, guid: 40dcb7436fbda66499f611e89efacd14, type: 3}
+  - {fileID: 2800000, guid: 14cc45818c8edd14e8cff0d089853c87, type: 3}
   description: '"The sign still says groceries. That is the point."
 
 
@@ -241596,6 +241609,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
   buildingName: Apartment
   buildingRole: 0
+  mapLabelImagesByUpgradeLevel:
+  - {fileID: 2800000, guid: ec9afad9abc2dc4498a18287492c5aed, type: 3}
+  - {fileID: 2800000, guid: d5bbee3f162a8ac4f8e8b50a56321be1, type: 3}
+  - {fileID: 2800000, guid: 7110a14f36c3bf9418de031102c42572, type: 3}
+  - {fileID: 2800000, guid: 16c9179d2af78104c8db7a7e951ede10, type: 3}
   description: '"Sometimes the smartest move is to disappear."
 
 
@@ -320434,6 +320452,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
   buildingName: Police Station
   buildingRole: 0
+  mapLabelImagesByUpgradeLevel:
+  - {fileID: 2800000, guid: a80618613a5c8474486ff56e269db390, type: 3}
   description: '"Everyone in this city has a price. Except, occasionally, the people
     in this building."
 
@@ -327308,22 +327328,52 @@ MonoBehaviour:
   aiActionDelay: 0.6
   firstEventDelay: 0
   delayBetweenEvents: 30
-  barHeight: 40
+  barHeight: 48
   popupWidth: 640
   popupHeight: 360
+  okButtonImage: {fileID: 2800000, guid: b786ccd3fd228294eb7ce4e9f4fdd478, type: 3}
+  howToPlayBackgroundImage: {fileID: 2800000, guid: 4559c0056c10fc74f86f623d366f3b34, type: 3}
+  pauseMenuBackgroundImage: {fileID: 2800000, guid: 47e55b067b002694f81f32d960757234, type: 3}
+  continueButtonImage: {fileID: 2800000, guid: 12f4c6ed5b47a4c449527c2919ff664f, type: 3}
+  quitButtonImage: {fileID: 2800000, guid: 7efdbe770191b0949897b211a5f45688, type: 3}
+  hudPanelBackgroundImage: {fileID: 2800000, guid: 4fb6725bce7e1dd4b8e84ef97e25a233, type: 3}
+  turnPanelBackgroundImage: {fileID: 2800000, guid: bb9200fa4b41bfc41a7c0d816ee5dc65, type: 3}
   opponentTerritoryPercent: 30
   playerTerritoryColor: {r: 0.1, g: 0.35, b: 1, a: 0.42}
   neutralTerritoryColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.48}
   opponentTerritoryColor: {r: 0.9, g: 0.1, b: 0.1, a: 0.42}
+  aiFactoryMapLabelImages:
+  - {fileID: 2800000, guid: 6982828ae2c5eda428f8ee3b9315ad30, type: 3}
+  - {fileID: 2800000, guid: b4afe4d793d01e746a7966c343154d53, type: 3}
+  - {fileID: 2800000, guid: 2dedaf6ded4a15144a274ecbd7f21cc1, type: 3}
+  - {fileID: 2800000, guid: cad1e6aaf924d204f892d2129d2d0284, type: 3}
+  aiWarehouseMapLabelImages:
+  - {fileID: 2800000, guid: f6069e016d2b40845af5ceb79723218e, type: 3}
+  - {fileID: 2800000, guid: 4abce9057029f4542a6503072758f98d, type: 3}
+  - {fileID: 2800000, guid: 60181a5da228cca4bbe6a5f4fd132bc0, type: 3}
+  - {fileID: 2800000, guid: 2e8ec05c3d8a6c74482e7b1c6f763fba, type: 3}
+  aiApartmentMapLabelImages:
+  - {fileID: 2800000, guid: 5b9d599f6bd21bf4aae1a57966590343, type: 3}
+  - {fileID: 2800000, guid: c7ce3e4f3aa47b747ba24b89125a7cad, type: 3}
+  - {fileID: 2800000, guid: 1fe793c18e1e4fe459c9685206a6dd72, type: 3}
+  - {fileID: 2800000, guid: 3be81859a27bd224a964becac76f0f07, type: 3}
+  aiWorkerContactMapLabelImages:
+  - {fileID: 2800000, guid: 89741869bc218b545a7c242e2a120152, type: 3}
+  safeOrderLabelImage: {fileID: 2800000, guid: 14e4e44582ac9994b91c38209f7bd347, type: 3}
+  volkovOrderLabelImage: {fileID: 2800000, guid: 8f2e90df6afa3934fade663de94ee6e3, type: 3}
+  neutralOrderLabelImage: {fileID: 2800000, guid: 0d1dd8f6f135be54f927c10281aa4af6, type: 3}
+  orderPopupBackgroundImage: {fileID: 2800000, guid: 4fb6725bce7e1dd4b8e84ef97e25a233, type: 3}
+  closeButtonImage: {fileID: 2800000, guid: f3075f08ec6704349ab89a3fc79c889b, type: 3}
+  acceptOrderButtonImage: {fileID: 2800000, guid: 27022bca393c3624697f55b44d68233c, type: 3}
   popupBackground: {fileID: 2800000, guid: e2784459644be7348b4ec3e78c5783cc, type: 3}
-  maleBackground: {fileID: 2800000, guid: e2784459644be7348b4ec3e78c5783cc, type: 3}
-  femaleBackground: {fileID: 2800000, guid: e936c58e0ab3d5441a1c1378edfa4b18, type: 3}
-  moneyIcon: {fileID: 2800000, guid: 242b4430c6f1a134ea42a9ef12fc5d3a, type: 3}
-  workersIcon: {fileID: 2800000, guid: a045aa1c620bfea498bf0638921b162c, type: 3}
-  factoryIcon: {fileID: 0}
-  storeIcon: {fileID: 0}
-  riskIcon: {fileID: 2800000, guid: a3ac026c44cb6124799f58e6cc188868, type: 3}
-  influenceIcon: {fileID: 0}
+  maleBackground: {fileID: 2800000, guid: 4ab8c85c622e6a44a9dcfe1ad7677dc0, type: 3}
+  femaleBackground: {fileID: 2800000, guid: 464a59b94e51de441915e89ecf0a8ee6, type: 3}
+  moneyIcon: {fileID: 2800000, guid: f9fe0eda8941fb649bf76a1ab31d36eb, type: 3}
+  workersIcon: {fileID: 2800000, guid: cfc22456c444cf64dad99560b58ead97, type: 3}
+  factoryIcon: {fileID: 2800000, guid: 03d335e340a77e44d8adf24365425cd8, type: 3}
+  storeIcon: {fileID: 2800000, guid: 3765d7335282952419d98614561a88d0, type: 3}
+  riskIcon: {fileID: 2800000, guid: b261c20ebf3715640b7a2c37eea1de8b, type: 3}
+  influenceIcon: {fileID: 2800000, guid: 0c77cc8005a4d2848b20f8f98ebccd1f, type: 3}
   uiAudioSource: {fileID: 2141461661}
   popupOpenSound: {fileID: 8300000, guid: 8b2bda80580f9234c89c519471c5b280, type: 3}
   buttonClickSound: {fileID: 8300000, guid: 193b7d116cdfd5846bd97c0c208a2ca2, type: 3}
@@ -329332,6 +329382,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
   buildingName: First Contact
   buildingRole: 2
+  mapLabelImagesByUpgradeLevel:
+  - {fileID: 2800000, guid: afd24d2f9785ca742a37345a0ae5ec39, type: 3}
   description: '"You do not find workers. Someone introduces them."
 
 
@@ -351729,6 +351781,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInfo
   buildingName: Abandoned Factory
   buildingRole: 1
+  mapLabelImagesByUpgradeLevel:
+  - {fileID: 2800000, guid: 37fd3239097992a438cc54f4fcc05b0c, type: 3}
+  - {fileID: 2800000, guid: 491dd87a088847a4bb14fd0cfb96a39f, type: 3}
+  - {fileID: 2800000, guid: e930e6711d39ab54cb3393535ccc7ff7, type: 3}
+  - {fileID: 2800000, guid: 034a6442874f98149bb72630eebd2d71, type: 3}
   description: '"Dead buildings are useful. Nobody asks why the lights are off."
 
 
@@ -456683,6 +456740,23 @@ MonoBehaviour:
   closeButton: {fileID: 783256195}
   titleText: {fileID: 2111130217}
   descriptionText: {fileID: 205158913}
+  backgroundImage: {fileID: 585160104}
+  defaultBackground: {fileID: 21300000, guid: 4fb6725bce7e1dd4b8e84ef97e25a233, type: 3}
+  corruptOfficerBackground: {fileID: 21300000, guid: 18c3ba33da167eb49ae904c769443bd0, type: 3}
+  closeButtonSprite: {fileID: 21300000, guid: f3075f08ec6704349ab89a3fc79c889b, type: 3}
+  factoryProduceButtonImage: {fileID: 2800000, guid: ced3da68e1eda4f4aa298cfb1441561a, type: 3}
+  factoryMoveButtonImage: {fileID: 2800000, guid: bb275c63f7e43944bb1aacd9954f726c, type: 3}
+  warehouseMoveButtonImage: {fileID: 2800000, guid: 0cd379c4abeaf8a49978f77184b74c60, type: 3}
+  factoryUpgradeButtonImage: {fileID: 2800000, guid: 1d9abb4db587ffc4796525cd77cd4493, type: 3}
+  corruptOfficerTrustButtonImage: {fileID: 2800000, guid: d017d4a8a57298344bd405c5b39d110f, type: 3}
+  corruptOfficerProtectionButtonImage: {fileID: 2800000, guid: 8da63c8f2fb3a72478142f6b593fc34d, type: 3}
+  corruptOfficerBribeButtonImage: {fileID: 2800000, guid: ea01a429616c6cc4f8d6b776e86074bd, type: 3}
+  hireWorkerButtonImage: {fileID: 2800000, guid: 6a9d342a9a1b15844906816de612155a, type: 3}
+  fireWorkerButtonImage: {fileID: 2800000, guid: 2833c6a4ba2352c43886a1c46653334e, type: 3}
+  callInFavorButtonImage: {fileID: 2800000, guid: 21f305f7bfb4c7443ac05d4131ae5b2d, type: 3}
+  buyApartmentButtonImage: {fileID: 2800000, guid: bc6338f1a35283b4592977db9f0c4fa7, type: 3}
+  layLowButtonImage: {fileID: 2800000, guid: af5854ecc402f094ab75e4a24a860bde, type: 3}
+  policeAmbushButtonImage: {fileID: 2800000, guid: 49c2a51a258602d42b4268046db20975, type: 3}
   uiAudioSource: {fileID: 1975835265}
   popupOpenSound: {fileID: 8300000, guid: 8b2bda80580f9234c89c519471c5b280, type: 3}
   buttonClickSound: {fileID: 8300000, guid: 193b7d116cdfd5846bd97c0c208a2ca2, type: 3}

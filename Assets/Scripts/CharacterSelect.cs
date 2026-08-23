@@ -62,7 +62,8 @@ public class CharacterSelect : MonoBehaviour
             return;
         }
 
-        if (string.IsNullOrEmpty(nameInput.text))
+        string enteredName = nameInput.text.Trim();
+        if (string.IsNullOrWhiteSpace(enteredName))
         {
             Debug.LogWarning("Enter your name!");
             return;
@@ -74,7 +75,7 @@ public class CharacterSelect : MonoBehaviour
             return;
         }
 
-        playerName = nameInput.text;
+        playerName = enteredName;
         playerCharacter = selectedCharacter;
 
         PlayButtonClick();

@@ -18,6 +18,13 @@ public class DeliveryOrderManager : MonoBehaviour
     [Min(1f)] public float minimumDeliverySeconds = 5f;
     [Min(0f)] public float handlingSecondsPerGram = 0.1f;
 
+    private Texture2D safeOrderLabelImage;
+    private Texture2D volkovOrderLabelImage;
+    private Texture2D neutralOrderLabelImage;
+    private Texture2D popupBackgroundImage;
+    private Texture2D closeButtonImage;
+    private Texture2D acceptOrderButtonImage;
+
     private readonly List<DeliveryOrder> orders = new List<DeliveryOrder>();
     private readonly List<DeliveryOrder> activeDeliveries = new List<DeliveryOrder>();
     private readonly List<DeliveryOrder> pendingPlayerDeliveries = new List<DeliveryOrder>();
@@ -92,6 +99,22 @@ public class DeliveryOrderManager : MonoBehaviour
         instance = this;
     }
 
+    public void ConfigureLabelImages(
+        Texture2D safeImage,
+        Texture2D volkovImage,
+        Texture2D neutralImage,
+        Texture2D popupImage,
+        Texture2D closeImage,
+        Texture2D acceptImage)
+    {
+        safeOrderLabelImage = safeImage;
+        volkovOrderLabelImage = volkovImage;
+        neutralOrderLabelImage = neutralImage;
+        popupBackgroundImage = popupImage;
+        closeButtonImage = closeImage;
+        acceptOrderButtonImage = acceptImage;
+    }
+
     void Update()
     {
         CompleteFinishedDeliveries();
@@ -147,7 +170,7 @@ public class DeliveryOrderManager : MonoBehaviour
                 continue;
             }
 
-            Rect rect = new Rect(screen.x - 55f, Screen.height - screen.y - 15f, 110f, 30f);
+            Rect rect = new Rect(screen.x - 72.5f, Screen.height - screen.y - 25f, 145f, 50f);
             if (rect.Contains(guiPosition))
             {
                 return true;
@@ -259,8 +282,18 @@ public class DeliveryOrderManager : MonoBehaviour
         GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
-        Rect rect = new Rect((Screen.width - 440f) / 2f, (Screen.height - 400f) / 2f, 440f, 400f);
-        GUI.Window(771002, rect, DrawOrderWindow, "Delivery request");
+        Rect rect = new Rect((Screen.width - 440f) / 2f, (Screen.height - 580f) / 2f, 440f, 580f);
+        if (popupBackgroundImage != null)
+        {
+            GUIStyle windowStyle = new GUIStyle(GUI.skin.window);
+            windowStyle.normal.background = popupBackgroundImage;
+            windowStyle.border = new RectOffset(0, 0, 0, 0);
+            GUI.Window(771002, rect, DrawOrderWindow, "Delivery request", windowStyle);
+        }
+        else
+        {
+            GUI.Window(771002, rect, DrawOrderWindow, "Delivery request");
+        }
 
         GUI.depth = previousDepth;
     }
@@ -507,7 +540,11 @@ public class DeliveryOrderManager : MonoBehaviour
 
     private void DrawOrderWindow(int windowId)
     {
-        if (GUI.Button(new Rect(410f, 2f, 26f, 20f), "X"))
+        Rect closeRect = new Rect(400f, 4f, 36f, 36f);
+        bool closeClicked = closeButtonImage != null
+            ? GUI.Button(closeRect, closeButtonImage, GUIStyle.none)
+            : GUI.Button(closeRect, "X");
+        if (closeClicked)
         {
             selectedOrder = -1;
             IsPopupOpen = false;
@@ -548,8 +585,29 @@ public class DeliveryOrderManager : MonoBehaviour
         }
         GUILayout.Space(16f);
 
-        GUI.enabled = CanCompleteDelivery(order) && !order.completed && !order.inProgress;
-        if (GUILayout.Button("Accept & Deliver", GUILayout.Height(40f)))
+        bool canAccept = CanCompleteDelivery(order) && !order.completed && !order.inProgress;
+        GUI.enabled = canAccept;
+        Color previousColor = GUI.color;
+        GUI.color = canAccept ? Color.white : new Color(0.4f, 0.4f, 0.4f, 0.8f);
+        bool accepted;
+        if (acceptOrderButtonImage != null)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            accepted = GUILayout.Button(
+                acceptOrderButtonImage,
+                GUIStyle.none,
+                GUILayout.Width(315f),
+                GUILayout.Height(60f));
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+        }
+        else
+        {
+            accepted = GUILayout.Button("Accept & Deliver", GUILayout.Height(40f));
+        }
+        GUI.color = previousColor;
+        if (accepted)
         {
             CompleteDelivery(order);
         }
@@ -899,15 +957,41 @@ public class DeliveryOrderManager : MonoBehaviour
                 continue;
             }
 
-            Rect rect = new Rect(screen.x - 55f, Screen.height - screen.y - 15f, 110f, 30f);
-            string territoryLabel = order.territoryOwner == TerritoryOwner.Player
-                ? "SAFE"
-                : order.territoryOwner == TerritoryOwner.AI ? "VOLKOV" : "NEUTRAL";
-            if (GUI.Button(rect, $"{territoryLabel} {i + 1}"))
+            Rect rect = new Rect(screen.x - 72.5f, Screen.height - screen.y - 25f, 145f, 50f);
+            Texture2D labelImage = GetOrderLabelImage(order.territoryOwner);
+            bool clicked;
+            if (labelImage != null)
+            {
+                clicked = GUI.Button(rect, labelImage, GUIStyle.none);
+            }
+            else
+            {
+                string territoryLabel = order.territoryOwner == TerritoryOwner.Player
+                    ? "SAFE"
+                    : order.territoryOwner == TerritoryOwner.AI ? "VOLKOV" : "NEUTRAL";
+                clicked = GUI.Button(rect, $"{territoryLabel} {i + 1}");
+            }
+
+            if (clicked)
             {
                 OpenOrder(i);
             }
         }
+    }
+
+    private Texture2D GetOrderLabelImage(TerritoryOwner owner)
+    {
+        if (owner == TerritoryOwner.Player)
+        {
+            return safeOrderLabelImage;
+        }
+
+        if (owner == TerritoryOwner.AI)
+        {
+            return volkovOrderLabelImage;
+        }
+
+        return neutralOrderLabelImage;
     }
 
     private void ClosePopups()

@@ -14,6 +14,23 @@ public class BuildingInfo : MonoBehaviour
     public string buildingName = "Building";
     public BuildingRole buildingRole = BuildingRole.General;
 
+    [Header("Map label images")]
+    public Texture2D[] mapLabelImagesByUpgradeLevel;
+
+    public Texture2D CurrentMapLabelImage
+    {
+        get
+        {
+            if (mapLabelImagesByUpgradeLevel == null || mapLabelImagesByUpgradeLevel.Length == 0)
+            {
+                return null;
+            }
+
+            int imageIndex = Mathf.Clamp(upgradeLevel, 0, mapLabelImagesByUpgradeLevel.Length - 1);
+            return mapLabelImagesByUpgradeLevel[imageIndex];
+        }
+    }
+
     [TextArea(2, 5)]
     public string description = "Short description of this building.";
 

@@ -151,6 +151,7 @@ public class AiFacilityMarker : MonoBehaviour
 {
     [SerializeField] private AiFacilityRole role;
     private Renderer facilityRenderer;
+    private Texture2D[] mapLabelImagesByUpgradeLevel;
 
     public AiFacilityRole Role
     {
@@ -167,9 +168,10 @@ public class AiFacilityMarker : MonoBehaviour
         }
     }
 
-    public void Configure(AiFacilityRole facilityRole)
+    public void Configure(AiFacilityRole facilityRole, Texture2D[] labelImagesByUpgradeLevel = null)
     {
         role = facilityRole;
+        mapLabelImagesByUpgradeLevel = labelImagesByUpgradeLevel;
         facilityRenderer = GetComponent<Renderer>();
         if (facilityRenderer == null)
         {
@@ -205,6 +207,14 @@ public class AiFacilityMarker : MonoBehaviour
             return;
         }
 
+        Texture2D labelImage = GetMapLabelImage();
+        if (labelImage != null)
+        {
+            Rect imageRect = new Rect(screen.x - 72.5f, Screen.height - screen.y - 25f, 145f, 50f);
+            GUI.DrawTexture(imageRect, labelImage, ScaleMode.ScaleToFit, true);
+            return;
+        }
+
         string label = role == AiFacilityRole.WorkerContact
             ? "VOLKOV WORKERS"
             : $"VOLKOV {role.ToString().ToUpperInvariant()}";
@@ -213,6 +223,43 @@ public class AiFacilityMarker : MonoBehaviour
         GUI.color = new Color(1f, 0.45f, 0.45f);
         GUI.Box(rect, label);
         GUI.color = previousColor;
+    }
+
+    private Texture2D GetMapLabelImage()
+    {
+        if (mapLabelImagesByUpgradeLevel == null || mapLabelImagesByUpgradeLevel.Length == 0 ||
+            GameResources.Instance == null)
+        {
+            return null;
+        }
+
+        int upgradeLevel;
+        if (role == AiFacilityRole.Factory)
+        {
+            upgradeLevel = GameResources.Instance.Opponent.factoryUpgradeLevel;
+        }
+        else if (role == AiFacilityRole.Warehouse)
+        {
+            upgradeLevel = GameResources.Instance.Opponent.warehouseUpgradeLevel;
+        }
+        else if (role == AiFacilityRole.Apartment)
+        {
+            upgradeLevel = GameResources.Instance.Opponent.apartmentUpgradeLevel;
+        }
+        else if (role == AiFacilityRole.WorkerContact)
+        {
+            upgradeLevel = 0;
+        }
+        else
+        {
+            return null;
+        }
+
+        int level = Mathf.Clamp(
+            upgradeLevel,
+            0,
+            mapLabelImagesByUpgradeLevel.Length - 1);
+        return mapLabelImagesByUpgradeLevel[level];
     }
 }
 

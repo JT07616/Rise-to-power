@@ -33,6 +33,16 @@ public class GameEventManager : MonoBehaviour
         }
     }
 
+    private static string PlayerDisplayName
+    {
+        get
+        {
+            return string.IsNullOrWhiteSpace(CharacterSelect.playerName)
+                ? "Player"
+                : CharacterSelect.playerName.Trim();
+        }
+    }
+
     private static GameEventManager instance;
 
     [Header("Turn system")]
@@ -53,9 +63,18 @@ public class GameEventManager : MonoBehaviour
     [Min(0)] public int idleDeliveryRiskReduction = 5;
 
     [Header("Style")]
-    public int barHeight = 40;
+    public int barHeight = 48;
     public int popupWidth = 640;
     public int popupHeight = 420;
+
+    [Header("Popup and pause menu images")]
+    public Texture2D okButtonImage;
+    public Texture2D howToPlayBackgroundImage;
+    public Texture2D pauseMenuBackgroundImage;
+    public Texture2D continueButtonImage;
+    public Texture2D quitButtonImage;
+    public Texture2D hudPanelBackgroundImage;
+    public Texture2D turnPanelBackgroundImage;
 
     [Header("Mini map territory")]
     [Range(0f, 100f)] public float opponentTerritoryPercent = 30f;
@@ -63,12 +82,25 @@ public class GameEventManager : MonoBehaviour
     public Color neutralTerritoryColor = new Color(0.45f, 0.45f, 0.45f, 0.48f);
     public Color opponentTerritoryColor = new Color(0.9f, 0.1f, 0.1f, 0.42f);
 
+    [Header("AI facility labels")]
+    public Texture2D[] aiFactoryMapLabelImages;
+    public Texture2D[] aiWarehouseMapLabelImages;
+    public Texture2D[] aiApartmentMapLabelImages;
+    public Texture2D[] aiWorkerContactMapLabelImages;
+
+    [Header("Delivery order labels")]
+    public Texture2D safeOrderLabelImage;
+    public Texture2D volkovOrderLabelImage;
+    public Texture2D neutralOrderLabelImage;
+    public Texture2D orderPopupBackgroundImage;
+    public Texture2D closeButtonImage;
+    public Texture2D acceptOrderButtonImage;
 
     public Texture2D popupBackground;
     public Texture2D maleBackground;
     public Texture2D femaleBackground;
 
-    [Header("Resource bar icons")]
+    [Header("Resource bar backgrounds")]
     public Texture2D moneyIcon;
     public Texture2D workersIcon;
     public Texture2D factoryIcon;
@@ -90,7 +122,6 @@ public class GameEventManager : MonoBehaviour
     private float notificationPreviousTimeScale = 1f;
     private Func<GameEvent> pendingNext;
     private float previousTimeScale = 1f;
-    private readonly Dictionary<Color, Texture2D> generatedResourceIcons = new Dictionary<Color, Texture2D>();
     private Font activityLogFont;
     private Camera miniMapCamera;
     private RenderTexture miniMapTexture;
@@ -100,6 +131,8 @@ public class GameEventManager : MonoBehaviour
     private float miniMapParcelArea;
     private bool playerTurnAnnouncementActive;
     private int playerTurnCountdown;
+    private bool aiTurnAnnouncementActive;
+    private int aiTurnCountdown;
     private bool playerStartedDeliveryToday;
     private bool victoryShown;
     private readonly List<ActivityEntry> activityLog = new List<ActivityEntry>();
@@ -164,10 +197,18 @@ public class GameEventManager : MonoBehaviour
         AiTurnTimeRemaining = 0f;
         IsPopupOpen = false;
 
-        if (GetComponent<DeliveryOrderManager>() == null)
+        DeliveryOrderManager deliveryOrders = GetComponent<DeliveryOrderManager>();
+        if (deliveryOrders == null)
         {
-            gameObject.AddComponent<DeliveryOrderManager>();
+            deliveryOrders = gameObject.AddComponent<DeliveryOrderManager>();
         }
+        deliveryOrders.ConfigureLabelImages(
+            safeOrderLabelImage,
+            volkovOrderLabelImage,
+            neutralOrderLabelImage,
+            orderPopupBackgroundImage,
+            closeButtonImage,
+            acceptOrderButtonImage);
 
         if (GetComponent<AmbushTrapManager>() == null)
         {
@@ -394,6 +435,23 @@ public class GameEventManager : MonoBehaviour
         AiActionsRemaining = actionsPerSide;
         AiTurnTimeRemaining = aiTurnDuration;
         ReportAiActivity("Volkov is planning his move...", "👻");
+        aiTurnAnnouncementActive = true;
+        IsPopupOpen = true;
+        StartCoroutine(BeginAiTurnCountdown());
+    }
+
+    IEnumerator BeginAiTurnCountdown()
+    {
+        for (int countdown = 4; countdown >= 1; countdown--)
+        {
+            aiTurnCountdown = countdown;
+            yield return new WaitForSeconds(1f);
+        }
+
+        aiTurnCountdown = 0;
+        aiTurnAnnouncementActive = false;
+        AiTurnTimeRemaining = aiTurnDuration;
+        IsPopupOpen = eventActive;
         StartCoroutine(PlayAiTurn());
     }
 
@@ -447,10 +505,61 @@ public class GameEventManager : MonoBehaviour
 
         List<Func<bool>> availableActions = new List<Func<bool>>();
         const int hireCost = 220;
-        const int productionGoods = 50;
+        int productionGoods = ai.FactoryProductionGoods;
         const int productionWorkers = 1;
-        const float productionSeconds = 30f;
+        float productionSeconds = ai.FactoryProductionDurationSeconds;
         const float transferSeconds = 10f;
+
+        if (ai.CanUpgradeFactory)
+        {
+            availableActions.Add(() =>
+            {
+                if (!ai.TryUpgradeFactory(out int cost))
+                {
+                    return false;
+                }
+
+                ReportAiActivity(
+                    $"Upgraded factory to level {ai.factoryUpgradeLevel} for {cost}.",
+                    "??");
+                FocusCameraOnAiFacility(AiFacilityRole.Factory);
+                return true;
+            });
+        }
+
+        if (ai.CanUpgradeWarehouse)
+        {
+            availableActions.Add(() =>
+            {
+                if (!ai.TryUpgradeWarehouse(out int cost))
+                {
+                    return false;
+                }
+
+                ReportAiActivity(
+                    $"Upgraded warehouse to level {ai.warehouseUpgradeLevel} for {cost}.",
+                    "??");
+                FocusCameraOnAiFacility(AiFacilityRole.Warehouse);
+                return true;
+            });
+        }
+
+        if (ai.CanUpgradeApartment)
+        {
+            availableActions.Add(() =>
+            {
+                if (!ai.TryUpgradeApartment(out int cost))
+                {
+                    return false;
+                }
+
+                ReportAiActivity(
+                    $"Upgraded apartment to level {ai.apartmentUpgradeLevel} for {cost}.",
+                    "??");
+                FocusCameraOnAiFacility(AiFacilityRole.Apartment);
+                return true;
+            });
+        }
 
         if (ai.workers < 5 && SharedActionRules.CanApplyResourceChange(ai, -hireCost, 1))
         {
@@ -582,8 +691,8 @@ public class GameEventManager : MonoBehaviour
             return;
         }
 
-        instance.AddActivity("YOU", emoji, message, new Color(0.35f, 0.82f, 1f));
-        Debug.Log($"Player: {message}");
+        instance.AddActivity(PlayerDisplayName, emoji, message, new Color(0.35f, 0.82f, 1f));
+        Debug.Log($"{PlayerDisplayName}: {message}");
     }
 
     public static void ReportAiActivity(string message, string emoji = "👻")
@@ -746,7 +855,7 @@ public class GameEventManager : MonoBehaviour
         bool introCanShow = CurrentDay == 1 && !IsPlayerTurn &&
                             PlayerActionsRemaining == 0 && AiTurnTimeRemaining <= 0f;
         if (notificationQueue.Count > 0 && !eventActive &&
-            !playerTurnAnnouncementActive && !IsPauseMenuOpen &&
+            !playerTurnAnnouncementActive && !aiTurnAnnouncementActive && !IsPauseMenuOpen &&
             (IsPlayerTurn || introCanShow))
         {
             ShowNotification(notificationQueue.Dequeue());
@@ -2236,7 +2345,13 @@ public class GameEventManager : MonoBehaviour
 
         if (playerTurnAnnouncementActive)
         {
-            DrawPlayerTurnAnnouncement();
+            DrawTurnAnnouncement($"{PlayerDisplayName.ToUpperInvariant()} TURN", playerTurnCountdown);
+            return;
+        }
+
+        if (aiTurnAnnouncementActive)
+        {
+            DrawTurnAnnouncement("VOLKOV TURN", aiTurnCountdown);
             return;
         }
 
@@ -2248,42 +2363,67 @@ public class GameEventManager : MonoBehaviour
 
     void DrawTurnPanel()
     {
-        const float panelWidth = 310f;
-        const float panelHeight = 42f;
+        const float minimumPanelWidth = 310f;
+        const float panelHeight = 54f;
         const float margin = 12f;
-        Rect panelRect = new Rect(Screen.width - panelWidth - margin, barHeight + margin, panelWidth, panelHeight);
-
-        GUI.Box(panelRect, GUIContent.none);
 
         GUIStyle statusStyle = new GUIStyle(GUI.skin.label)
         {
             fontSize = 15,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
+            wordWrap = false,
+            clipping = TextClipping.Clip,
             normal = { textColor = Color.white }
         };
 
         string status;
         if (playerTurnAnnouncementActive)
         {
-            status = $"Day {CurrentDay}  |  Your turn starts in {playerTurnCountdown}";
+            status = $"Day {CurrentDay}  |  {PlayerDisplayName} turn starts in {playerTurnCountdown}";
+        }
+        else if (aiTurnAnnouncementActive)
+        {
+            status = $"Day {CurrentDay}  |  Volkov turn starts in {aiTurnCountdown}";
         }
         else
         {
             status = IsPlayerTurn
-                ? $"Day {CurrentDay}  |  Actions: {PlayerActionsRemaining}/{actionsPerSide}  |  {FormatDayClock()}"
+                ? $"Day {CurrentDay}  |  {PlayerDisplayName} turn  |  Actions: {PlayerActionsRemaining}/{actionsPerSide}  |  {FormatDayClock()}"
                 : $"Day {CurrentDay}  |  Volkov: {AiActionsRemaining}/{actionsPerSide}  |  {FormatDayClock()}";
         }
-        GUI.Label(new Rect(panelRect.x + 8f, panelRect.y + 8f, panelRect.width - 16f, 26f), status, statusStyle);
+
+        float maximumTextWidth = Mathf.Max(1f, Screen.width - margin * 2f - 32f);
+        float textWidth = statusStyle.CalcSize(new GUIContent(status)).x;
+        if (textWidth > maximumTextWidth)
+        {
+            statusStyle.fontSize = Mathf.Max(11, Mathf.FloorToInt(statusStyle.fontSize * maximumTextWidth / textWidth));
+            textWidth = statusStyle.CalcSize(new GUIContent(status)).x;
+        }
+
+        float panelWidth = Mathf.Min(
+            Screen.width - margin * 2f,
+            Mathf.Max(minimumPanelWidth, textWidth + 32f));
+        Rect panelRect = new Rect(Screen.width - panelWidth - margin, barHeight + margin, panelWidth, panelHeight);
+        if (turnPanelBackgroundImage != null)
+        {
+            GUI.DrawTexture(panelRect, turnPanelBackgroundImage, ScaleMode.StretchToFill, true);
+        }
+        else
+        {
+            GUI.Box(panelRect, GUIContent.none);
+        }
+
+        GUI.Label(new Rect(panelRect.x + 16f, panelRect.y, panelRect.width - 32f, panelRect.height), status, statusStyle);
     }
 
     void DrawActivityPanel()
     {
-        const float width = 430f;
-        const float height = 240f;
+        const float width = 390f;
+        const float height = 210f;
         const float margin = 12f;
         Rect panel = new Rect(margin, barHeight + margin, width, height);
-        GUI.Box(panel, "ACTIVITY LOG");
+        DrawHudPanelBackground(panel, "ACTIVITY LOG");
 
         if (activityLogFont == null)
         {
@@ -2332,7 +2472,7 @@ public class GameEventManager : MonoBehaviour
         }
     }
 
-    void DrawPlayerTurnAnnouncement()
+    void DrawTurnAnnouncement(string title, int countdown)
     {
         int previousDepth = GUI.depth;
         GUI.depth = -900;
@@ -2355,8 +2495,11 @@ public class GameEventManager : MonoBehaviour
         };
 
         float centerY = Screen.height * 0.5f;
-        GUI.Label(new Rect(0f, centerY - 100f, Screen.width, 60f), "YOUR TURN", titleStyle);
-        GUI.Label(new Rect(0f, centerY - 35f, Screen.width, 100f), playerTurnCountdown.ToString(), countdownStyle);
+        GUI.Label(
+            new Rect(0f, centerY - 100f, Screen.width, 60f),
+            title,
+            titleStyle);
+        GUI.Label(new Rect(0f, centerY - 35f, Screen.width, 100f), countdown.ToString(), countdownStyle);
 
         GUI.depth = previousDepth;
     }
@@ -2427,7 +2570,7 @@ public class GameEventManager : MonoBehaviour
         Rect panel = new Rect(Screen.width - width - margin, Screen.height - height - margin, width, height);
         Rect map = new Rect(panel.x + 10f, panel.y + 56f, panel.width - 20f, panel.height - 66f);
 
-        GUI.Box(panel, "CITY TERRITORY");
+        DrawHudPanelBackground(panel, "CITY TERRITORY");
 
         float playerPercent = GetTerritoryPercent(TerritoryOwner.Player);
         float opponentPercent = GetTerritoryPercent(TerritoryOwner.AI);
@@ -2446,6 +2589,27 @@ public class GameEventManager : MonoBehaviour
         DrawDistrictLabels(map);
     }
 
+    void DrawHudPanelBackground(Rect panel, string title)
+    {
+        if (hudPanelBackgroundImage != null)
+        {
+            GUI.DrawTexture(panel, hudPanelBackgroundImage, ScaleMode.StretchToFill, true);
+        }
+        else
+        {
+            GUI.Box(panel, GUIContent.none);
+        }
+
+        GUIStyle titleStyle = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 12,
+            fontStyle = FontStyle.Bold,
+            normal = { textColor = Color.white }
+        };
+        GUI.Label(new Rect(panel.x, panel.y + 2f, panel.width, 24f), title, titleStyle);
+    }
+
     void DrawMiniMapLegend(
         Rect rect,
         float playerPercent,
@@ -2460,7 +2624,7 @@ public class GameEventManager : MonoBehaviour
         };
         string[] labels =
         {
-            $"You {playerPercent:0}%",
+            $"{PlayerDisplayName} {playerPercent:0}%",
             $"Neutral {neutralPercent:0}%",
             $"Volkov {opponentPercent:0}%"
         };
@@ -2861,7 +3025,27 @@ public class GameEventManager : MonoBehaviour
         {
             marker = parcel.source.AddComponent<AiFacilityMarker>();
         }
-        marker.Configure(role);
+        Texture2D[] labelImages = null;
+        if (instance != null)
+        {
+            if (role == AiFacilityRole.Factory)
+            {
+                labelImages = instance.aiFactoryMapLabelImages;
+            }
+            else if (role == AiFacilityRole.Warehouse)
+            {
+                labelImages = instance.aiWarehouseMapLabelImages;
+            }
+            else if (role == AiFacilityRole.Apartment)
+            {
+                labelImages = instance.aiApartmentMapLabelImages;
+            }
+            else if (role == AiFacilityRole.WorkerContact)
+            {
+                labelImages = instance.aiWorkerContactMapLabelImages;
+            }
+        }
+        marker.Configure(role, labelImages);
     }
 
     void DrawMiniMapTerritories(Rect map)
@@ -2929,8 +3113,8 @@ public class GameEventManager : MonoBehaviour
         GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
-        float windowWidth = 360f;
-        float windowHeight = 220f;
+        const float windowWidth = 650f;
+        const float windowHeight = 408f;
         Rect windowRect = new Rect(
             (Screen.width - windowWidth) / 2f,
             (Screen.height - windowHeight) / 2f,
@@ -2938,22 +3122,31 @@ public class GameEventManager : MonoBehaviour
             windowHeight
         );
 
-        GUI.ModalWindow(987654, windowRect, DrawPauseWindow, "Pause Menu");
+        GUIStyle windowStyle = new GUIStyle(GUIStyle.none);
+        if (pauseMenuBackgroundImage != null)
+        {
+            windowStyle.normal.background = pauseMenuBackgroundImage;
+        }
+        GUI.ModalWindow(987654, windowRect, DrawPauseWindow, GUIContent.none, windowStyle);
         GUI.depth = previousDepth;
     }
 
     void DrawPauseWindow(int windowId)
     {
-        float buttonWidth = 220f;
-        float buttonHeight = 44f;
-        float x = (360f - buttonWidth) / 2f;
-
-        if (GUI.Button(new Rect(x, 70f, buttonWidth, buttonHeight), "Continue Game"))
+        Rect continueRect = new Rect((650f - 483f) / 2f, 135f, 483f, 99f);
+        bool continueClicked = continueButtonImage != null
+            ? GUI.Button(continueRect, continueButtonImage, GUIStyle.none)
+            : GUI.Button(continueRect, "Continue Game");
+        if (continueClicked)
         {
             ContinueGame();
         }
 
-        if (GUI.Button(new Rect(x, 130f, buttonWidth, buttonHeight), "Quit Game"))
+        Rect quitRect = new Rect((650f - 392f) / 2f, 265f, 392f, 99f);
+        bool quitClicked = quitButtonImage != null
+            ? GUI.Button(quitRect, quitButtonImage, GUIStyle.none)
+            : GUI.Button(quitRect, "Quit Game");
+        if (quitClicked)
         {
             QuitGame();
         }
@@ -2995,108 +3188,66 @@ public class GameEventManager : MonoBehaviour
 
         string[] resourceTexts =
         {
-            $"Money: {r.novac} €",
-            $"Factory: {r.robaUTvornici}/{r.kapacitetTvornice} g",
-            $"Store: {r.robaUSkladistu}/{r.kapacitetSkladista} g" +
-                (r.robaUTransportu > 0 ? $" (+{r.robaUTransportu} g moving)" : ""),
-            $"Workers: {r.SlobodniRadnici}/{r.radnici} free",
-            $"Risk: {r.rizik}" +
-                (DeliveryOrderManager.PendingPlayerRisk > 0
-                    ? $" (+{DeliveryOrderManager.PendingPlayerRisk} pending)"
-                    : "") +
-                $"/100 (Raids {r.policeRaidCount}/{r.maxPoliceRaids})",
-            $"Influence: {r.utjecaj}% territory"
+            $"{r.novac} €",
+            $"{r.robaUTvornici}/{r.kapacitetTvornice} g",
+            $"{r.robaUSkladistu}/{r.kapacitetSkladista} g" +
+                (r.robaUTransportu > 0 ? $" (+{r.robaUTransportu} g)" : ""),
+            $"{r.SlobodniRadnici}/{r.radnici}",
+            $"{r.rizik}/100",
+            $"{r.utjecaj}%"
         };
 
         GUIStyle style = new GUIStyle(GUI.skin.label)
         {
             fontSize = 16,
-            alignment = TextAnchor.MiddleLeft,
+            alignment = TextAnchor.MiddleCenter,
             wordWrap = false,
             clipping = TextClipping.Overflow,
             normal = { textColor = Color.white }
         };
 
-        const float baseIconSize = 20f;
-        const float baseIconTextGap = 8f;
-        const float baseItemGap = 32f;
-        const float horizontalPadding = 15f;
-        const float minScale = 0.72f;
-
-        float contentWidth = horizontalPadding;
-        foreach (string text in resourceTexts)
-        {
-            contentWidth += baseIconSize + baseIconTextGap + GetLabelWidth(style, text) + baseItemGap;
-        }
-
-        float availableWidth = Mathf.Max(1f, Screen.width - horizontalPadding);
-        float scale = Mathf.Clamp(availableWidth / contentWidth, minScale, 1f);
-        if (scale < 1f)
-        {
-            style.fontSize = Mathf.Max(11, Mathf.RoundToInt(style.fontSize * scale));
-        }
-
-        float iconSize = baseIconSize * scale;
-        float iconTextGap = baseIconTextGap * scale;
-        float itemGap = baseItemGap * scale;
+        const int resourceCount = 6;
+        const float itemGap = 12f;
+        const float horizontalPadding = 6f;
+        float panelWidth = Mathf.Max(
+            1f,
+            (Screen.width - horizontalPadding * 2f - itemGap * (resourceCount - 1)) / resourceCount);
 
         float x = horizontalPadding;
-        DrawResourceItem(ref x, moneyIcon, new Color(0.95f, 0.78f, 0.2f), resourceTexts[0], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, factoryIcon, new Color(0.45f, 0.95f, 0.65f), resourceTexts[1], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, storeIcon, new Color(0.35f, 0.8f, 0.55f), resourceTexts[2], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, workersIcon, new Color(0.95f, 0.55f, 0.25f), resourceTexts[3], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, riskIcon, new Color(0.95f, 0.25f, 0.2f), resourceTexts[4], style, iconSize, iconTextGap, itemGap);
-        DrawResourceItem(ref x, influenceIcon, new Color(0.45f, 0.7f, 1f), resourceTexts[5], style, iconSize, iconTextGap, itemGap);
+        DrawResourceItem(ref x, moneyIcon, resourceTexts[0], style, panelWidth, itemGap);
+        DrawResourceItem(ref x, factoryIcon, resourceTexts[1], style, panelWidth, itemGap);
+        DrawResourceItem(ref x, storeIcon, resourceTexts[2], style, panelWidth, itemGap);
+        DrawResourceItem(ref x, workersIcon, resourceTexts[3], style, panelWidth, itemGap);
+        DrawResourceItem(ref x, riskIcon, resourceTexts[4], style, panelWidth, itemGap);
+        DrawResourceItem(ref x, influenceIcon, resourceTexts[5], style, panelWidth, itemGap);
     }
 
-    void DrawResourceItem(ref float x, Texture2D icon, Color fallbackColor, string text, GUIStyle style,
-                          float iconSize, float iconTextGap, float itemGap)
+    void DrawResourceItem(ref float x, Texture2D background, string text, GUIStyle style,
+                          float panelWidth, float itemGap)
     {
-        float y = (barHeight - iconSize) / 2f;
-        Texture2D texture = icon != null ? icon : GetGeneratedResourceIcon(fallbackColor);
-        GUI.DrawTexture(new Rect(x, y, iconSize, iconSize), texture, ScaleMode.ScaleToFit, true);
-        x += iconSize + iconTextGap;
-
-        float textWidth = GetLabelWidth(style, text);
-        GUI.Label(new Rect(x, 0, textWidth, barHeight), text, style);
-        x += textWidth + itemGap;
-    }
-
-    float GetLabelWidth(GUIStyle style, string text)
-    {
-        style.CalcMinMaxWidth(new GUIContent(text), out _, out float maxWidth);
-        return Mathf.Ceil(maxWidth) + 12f;
-    }
-
-    Texture2D GetGeneratedResourceIcon(Color color)
-    {
-        if (generatedResourceIcons.TryGetValue(color, out Texture2D icon))
+        Rect panelRect = new Rect(x, 2f, panelWidth, barHeight - 4f);
+        if (background != null)
         {
-            return icon;
+            GUI.DrawTexture(panelRect, background, ScaleMode.StretchToFill, true);
+        }
+        else
+        {
+            GUI.Box(panelRect, GUIContent.none);
         }
 
-        const int size = 32;
-        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        Color transparent = new Color(0f, 0f, 0f, 0f);
-        Vector2 center = new Vector2((size - 1) / 2f, (size - 1) / 2f);
-        float radius = size * 0.43f;
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                float distance = Vector2.Distance(new Vector2(x, y), center);
-                texture.SetPixel(x, y, distance <= radius ? color : transparent);
-            }
-        }
-
-        texture.Apply();
-        generatedResourceIcons[color] = texture;
-        return texture;
+        Rect textRect = new Rect(panelRect.x + 4f, panelRect.y - 2f, panelRect.width, panelRect.height);
+        GUI.Label(textRect, text, style);
+        x += panelWidth + itemGap;
     }
 
     void DrawEventPopup()
     {
+        if (currentEvent.name == "COMMANDS" && howToPlayBackgroundImage != null)
+        {
+            DrawHowToPlayPopup();
+            return;
+        }
+
         float x = (Screen.width - popupWidth) / 2f;
         float y = (Screen.height - popupHeight) / 2f;
         Rect rect = new Rect(x, y, popupWidth, popupHeight);
@@ -3133,7 +3284,25 @@ public class GameEventManager : MonoBehaviour
 
         for (int i = 0; i < currentEvent.options.Count; i++)
         {
-            if (GUILayout.Button(currentEvent.options[i].text, GUILayout.Height(36)))
+            bool clicked;
+            if (currentEvent.options[i].text == "OK" && okButtonImage != null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.FlexibleSpace();
+                clicked = GUILayout.Button(
+                    okButtonImage,
+                    GUIStyle.none,
+                    GUILayout.Width(253f),
+                    GUILayout.Height(60f));
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+            }
+            else
+            {
+                clicked = GUILayout.Button(currentEvent.options[i].text, GUILayout.Height(36));
+            }
+
+            if (clicked)
             {
                 Choose(i);
                 break;
@@ -3141,5 +3310,36 @@ public class GameEventManager : MonoBehaviour
         }
 
         GUILayout.EndArea();
+    }
+
+    void DrawHowToPlayPopup()
+    {
+        int previousDepth = GUI.depth;
+        GUI.depth = -1000;
+
+        const float sourceWidth = 620f;
+        const float sourceHeight = 786f;
+        float scale = Mathf.Min(0.8f, (Screen.height - 30f) / sourceHeight);
+        Rect rect = new Rect(
+            (Screen.width - sourceWidth * scale) / 2f,
+            (Screen.height - sourceHeight * scale) / 2f,
+            sourceWidth * scale,
+            sourceHeight * scale);
+        GUI.DrawTexture(rect, howToPlayBackgroundImage, ScaleMode.StretchToFill, true);
+
+        Rect buttonRect = new Rect(
+            rect.x + (sourceWidth - 253f) * 0.5f * scale,
+            rect.y + 715f * scale,
+            253f * scale,
+            60f * scale);
+        bool clicked = okButtonImage != null
+            ? GUI.Button(buttonRect, okButtonImage, GUIStyle.none)
+            : GUI.Button(buttonRect, "OK");
+        if (clicked)
+        {
+            Choose(0);
+        }
+
+        GUI.depth = previousDepth;
     }
 }

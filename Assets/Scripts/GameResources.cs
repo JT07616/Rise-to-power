@@ -230,6 +230,17 @@ public static class SharedActionRules
 [System.Serializable]
 public class OpponentResources : IActionResources
 {
+    private const int MaxFactoryUpgradeLevel = 3;
+    private static readonly int[] FactoryUpgradeCosts = { 700, 1400, 2500 };
+    private static readonly int[] FactoryBatchSizes = { 50, 75, 100, 150 };
+    private static readonly int[] FactoryCapacities = { 100, 150, 250, 400 };
+    private static readonly float[] FactoryProductionDurations = { 30f, 30f, 25f, 20f };
+    private const int MaxWarehouseUpgradeLevel = 3;
+    private static readonly int[] WarehouseUpgradeCosts = { 600, 1200, 2200 };
+    private static readonly int[] WarehouseCapacities = { 100, 200, 350, 550 };
+    private const int MaxApartmentUpgradeLevel = 3;
+    private static readonly int[] ApartmentUpgradeCosts = { 800, 1500, 2500 };
+
     public int money;
     public int factoryGoods;
     public int warehouseGoods;
@@ -266,6 +277,43 @@ public class OpponentResources : IActionResources
     public int TotalGoods
     {
         get { return factoryGoods + warehouseGoods + goodsInTransit; }
+    }
+
+    public int FactoryProductionGoods
+    {
+        get { return FactoryBatchSizes[Mathf.Clamp(factoryUpgradeLevel, 0, MaxFactoryUpgradeLevel)]; }
+    }
+
+    public float FactoryProductionDurationSeconds
+    {
+        get { return FactoryProductionDurations[Mathf.Clamp(factoryUpgradeLevel, 0, MaxFactoryUpgradeLevel)]; }
+    }
+
+    public bool CanUpgradeFactory
+    {
+        get
+        {
+            return factoryUpgradeLevel < MaxFactoryUpgradeLevel &&
+                   CanAfford(FactoryUpgradeCosts[factoryUpgradeLevel]);
+        }
+    }
+
+    public bool CanUpgradeWarehouse
+    {
+        get
+        {
+            return warehouseUpgradeLevel < MaxWarehouseUpgradeLevel &&
+                   CanAfford(WarehouseUpgradeCosts[warehouseUpgradeLevel]);
+        }
+    }
+
+    public bool CanUpgradeApartment
+    {
+        get
+        {
+            return apartmentUpgradeLevel < MaxApartmentUpgradeLevel &&
+                   CanAfford(ApartmentUpgradeCosts[apartmentUpgradeLevel]);
+        }
     }
 
     public bool IsProducing
@@ -329,6 +377,64 @@ public class OpponentResources : IActionResources
         }
 
         money -= amount;
+        return true;
+    }
+
+    public bool TryUpgradeFactory(out int cost)
+    {
+        cost = 0;
+        if (!CanUpgradeFactory)
+        {
+            return false;
+        }
+
+        cost = FactoryUpgradeCosts[factoryUpgradeLevel];
+        if (!TrySpendMoney(cost))
+        {
+            return false;
+        }
+
+        factoryUpgradeLevel++;
+        factoryCapacity = Mathf.Max(factoryCapacity, FactoryCapacities[factoryUpgradeLevel]);
+        Clamp();
+        return true;
+    }
+
+    public bool TryUpgradeWarehouse(out int cost)
+    {
+        cost = 0;
+        if (!CanUpgradeWarehouse)
+        {
+            return false;
+        }
+
+        cost = WarehouseUpgradeCosts[warehouseUpgradeLevel];
+        if (!TrySpendMoney(cost))
+        {
+            return false;
+        }
+
+        warehouseUpgradeLevel++;
+        warehouseCapacity = Mathf.Max(warehouseCapacity, WarehouseCapacities[warehouseUpgradeLevel]);
+        Clamp();
+        return true;
+    }
+
+    public bool TryUpgradeApartment(out int cost)
+    {
+        cost = 0;
+        if (!CanUpgradeApartment)
+        {
+            return false;
+        }
+
+        cost = ApartmentUpgradeCosts[apartmentUpgradeLevel];
+        if (!TrySpendMoney(cost))
+        {
+            return false;
+        }
+
+        apartmentUpgradeLevel++;
         return true;
     }
 

@@ -12,6 +12,14 @@ public class BuildingSelector : MonoBehaviour
     public LayerMask clickableLayers = ~0;
     public BuildingPopupUI popupUI;
 
+    [Header("Building shortcut images")]
+    public Texture2D corruptOfficerShortcutImage;
+    public Texture2D warehouseShortcutImage;
+    public Texture2D policeStationShortcutImage;
+    public Texture2D factoryShortcutImage;
+    public Texture2D apartmentShortcutImage;
+    public Texture2D workerContactShortcutImage;
+
     private BuildingInfo hoveredBuilding;
     private BuildingInfo selectedBuilding;
     private BuildingInfo[] labeledBuildings;
@@ -209,9 +217,7 @@ public class BuildingSelector : MonoBehaviour
 
     void OnGUI()
     {
-        if (mainCamera == null || labeledBuildings == null ||
-            GameEventManager.IsPauseMenuOpen || GameEventManager.IsPopupOpen ||
-            DeliveryOrderManager.IsPopupOpen || !GameEventManager.CanPlayerAct)
+        if (labeledBuildings == null)
         {
             return;
         }
@@ -219,6 +225,20 @@ public class BuildingSelector : MonoBehaviour
         int previousDepth = GUI.depth;
         GUI.depth = 100;
 
+        if (mainCamera != null && !GameEventManager.IsPauseMenuOpen &&
+            !GameEventManager.IsPopupOpen && !DeliveryOrderManager.IsPopupOpen &&
+            GameEventManager.CanPlayerAct)
+        {
+            DrawBuildingLabels();
+        }
+
+        DrawBuildingShortcuts();
+
+        GUI.depth = previousDepth;
+    }
+
+    void DrawBuildingLabels()
+    {
         foreach (BuildingInfo building in labeledBuildings)
         {
             if (building == null || !IsLabeledBuilding(building))
@@ -232,16 +252,25 @@ public class BuildingSelector : MonoBehaviour
                 continue;
             }
 
-            Rect rect = new Rect(screen.x - 65f, Screen.height - screen.y - 15f, 130f, 30f);
-            if (GUI.Button(rect, GetBuildingLabel(building)))
+            Texture2D labelImage = building.CurrentMapLabelImage;
+            bool clicked;
+
+            if (labelImage != null)
+            {
+                Rect imageRect = new Rect(screen.x - 72.5f, Screen.height - screen.y - 25f, 145f, 50f);
+                clicked = GUI.Button(imageRect, labelImage, GUIStyle.none);
+            }
+            else
+            {
+                Rect textRect = new Rect(screen.x - 65f, Screen.height - screen.y - 15f, 130f, 30f);
+                clicked = GUI.Button(textRect, GetBuildingLabel(building));
+            }
+
+            if (clicked)
             {
                 FocusAndShow(building);
             }
         }
-
-        DrawBuildingShortcuts();
-
-        GUI.depth = previousDepth;
     }
 
     void DrawBuildingShortcuts()
@@ -284,18 +313,28 @@ public class BuildingSelector : MonoBehaviour
                 buttonSize,
                 buttonSize);
             bool hovered = buttonRect.Contains(Event.current.mousePosition);
-            Color previousColor = GUI.color;
-            GUI.color = new Color(0f, 0f, 0f, 0.72f);
-            GUI.DrawTexture(
-                new Rect(buttonRect.x + 2f, buttonRect.y + 3f, buttonSize, buttonSize),
-                shortcutButtonTexture);
-            GUI.color = hovered
-                ? new Color(0.2f, 0.75f, 1f, 1f)
-                : new Color(0.1f, 0.38f, 0.72f, 0.96f);
-            GUI.DrawTexture(buttonRect, shortcutButtonTexture);
-            GUI.color = previousColor;
+            Texture2D shortcutImage = GetBuildingShortcutImage(building);
+            bool clicked;
+            if (shortcutImage != null)
+            {
+                clicked = GUI.Button(buttonRect, shortcutImage, GUIStyle.none);
+            }
+            else
+            {
+                Color previousColor = GUI.color;
+                GUI.color = new Color(0f, 0f, 0f, 0.72f);
+                GUI.DrawTexture(
+                    new Rect(buttonRect.x + 2f, buttonRect.y + 3f, buttonSize, buttonSize),
+                    shortcutButtonTexture);
+                GUI.color = hovered
+                    ? new Color(0.2f, 0.75f, 1f, 1f)
+                    : new Color(0.1f, 0.38f, 0.72f, 0.96f);
+                GUI.DrawTexture(buttonRect, shortcutButtonTexture);
+                GUI.color = previousColor;
+                clicked = GUI.Button(buttonRect, GetBuildingShortcut(building), buttonStyle);
+            }
 
-            if (GUI.Button(buttonRect, GetBuildingShortcut(building), buttonStyle) &&
+            if (clicked &&
                 Vector2.Distance(Event.current.mousePosition, buttonRect.center) <= buttonSize * 0.5f)
             {
                 FocusOnly(building);
@@ -308,6 +347,33 @@ public class BuildingSelector : MonoBehaviour
                     building.buildingName,
                     tooltipStyle);
             }
+        }
+    }
+
+    Texture2D GetBuildingShortcutImage(BuildingInfo building)
+    {
+        if (building.buildingName == "Apartment")
+        {
+            return apartmentShortcutImage;
+        }
+
+        if (building.buildingName == "Police Station")
+        {
+            return policeStationShortcutImage;
+        }
+
+        switch (building.buildingRole)
+        {
+            case BuildingRole.Factory:
+                return factoryShortcutImage;
+            case BuildingRole.Warehouse:
+                return warehouseShortcutImage;
+            case BuildingRole.WorkerContact:
+                return workerContactShortcutImage;
+            case BuildingRole.CorruptOfficer:
+                return corruptOfficerShortcutImage;
+            default:
+                return null;
         }
     }
 
