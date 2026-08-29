@@ -680,7 +680,8 @@ public class GameEventManager : MonoBehaviour
             DeliveryVehicleManager.Instance.StartGoodsTransferJourney(
                 factory.transform.position,
                 warehouse.transform.position,
-                durationSeconds);
+                durationSeconds,
+                rival: true);
         }
     }
 

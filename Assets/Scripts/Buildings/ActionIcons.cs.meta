@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: b6e5a83381019a048b272c027df39bb4
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - hammerIcon: {fileID: 2800000, guid: 57b0c423dbff1f04fb3fcf0481941e9f, type: 3}
+  - gearIcon: {fileID: 2800000, guid: 6d6a0591b88c66e48bad0b20827c98f1, type: 3}
+  - workerIcon: {fileID: 2800000, guid: 51f43a1720e06b04ba2e87eb9d7e9612, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

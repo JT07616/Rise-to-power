@@ -246,7 +246,7 @@ public class DeliveryOrderManager : MonoBehaviour
                 instance.GetAiOperationPosition(),
                 targetPosition,
                 duration,
-                () => instance.CompleteAiDelivery(delivery));
+                () => instance.CompleteAiDelivery(delivery), null, true);
 
         GameEventManager.FocusCameraOnWorldPosition(targetPosition);
 

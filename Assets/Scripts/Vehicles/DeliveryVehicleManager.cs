@@ -40,11 +40,12 @@ public class DeliveryVehicleManager : MonoBehaviour
         Vector3 destination,
         float duration,
         Action onArrival,
-        Action onVehicleReturned = null)
+        Action onVehicleReturned = null,
+        bool rival = false)
     {
         return StartJourney(
             PickDeliveryPrefab(), startPosition, destination, duration,
-            onArrival, onVehicleReturned, null, null);
+            onArrival, onVehicleReturned, null, null, rival);
     }
 
     public bool StartGoodsTransferJourney(
@@ -54,11 +55,12 @@ public class DeliveryVehicleManager : MonoBehaviour
         Action onArrival = null,
         Action onVehicleReturned = null,
         Vector3? returnDestination = null,
-        Vector3? outboundWaypoint = null)
+        Vector3? outboundWaypoint = null,
+        bool rival = false)
     {
         return StartJourney(
             goodsTransferVehiclePrefab, startPosition, destination, duration,
-            onArrival, onVehicleReturned, returnDestination, outboundWaypoint);
+            onArrival, onVehicleReturned, returnDestination, outboundWaypoint, rival);
     }
 
     private DeliveryVehicle PickDeliveryPrefab()
@@ -81,7 +83,8 @@ public class DeliveryVehicleManager : MonoBehaviour
         Action onArrival,
         Action onReturned,
         Vector3? returnPoint,
-        Vector3? waypoint)
+        Vector3? waypoint,
+        bool rival = false)
     {
         if (prefab == null)
         {
@@ -97,9 +100,10 @@ public class DeliveryVehicleManager : MonoBehaviour
         }
 
         DeliveryVehicle vehicle = Instantiate(prefab, hit.position, Quaternion.identity);
+        vehicle.rival = rival;
         if (vehicle.BeginJourney(hit.position, destination, duration, onArrival, onReturned, returnPoint, waypoint))
         {
-            if (prefab == goodsTransferVehiclePrefab && transferRippleSpot != null)
+            if (prefab == goodsTransferVehiclePrefab && transferRippleSpot != null && !rival)
                 vehicle.rippleSpot = transferRippleSpot.position;
 
             return true;

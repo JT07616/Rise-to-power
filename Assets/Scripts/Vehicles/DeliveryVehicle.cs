@@ -17,6 +17,10 @@ public class DeliveryVehicle : MonoBehaviour
     [Min(1f)] public float minimumJourneyTimeout = 15f;
     public GameObject ripplePrefab;
     public Vector3 rippleSpot;
+    public bool rival;
+    public Color rivalTint = new Color(1f, 0.65f, 0.65f);
+    public Color rivalIconTint = new Color(1f, 0.25f, 0.25f);
+    public GameObject rivalMarkerPrefab;
 
     private NavMeshAgent agent;
     private NavMeshObstacle parkedObstacle;
@@ -42,6 +46,7 @@ public class DeliveryVehicle : MonoBehaviour
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        agent.avoidancePriority = UnityEngine.Random.Range(30, 70);
         if (TryGetComponent(out parkedObstacle)) parkedObstacle.enabled = false;
         if (!TryGetComponent(out LaneCentering _)) gameObject.AddComponent<LaneCentering>();
         if (!TryGetComponent(out indicator)) indicator = gameObject.AddComponent<DeliveryIndicator>();
@@ -96,6 +101,14 @@ public class DeliveryVehicle : MonoBehaviour
             Vector3 toOther = other.transform.position - transform.position;
             if (toOther.magnitude > 7f) continue;
             if (Vector3.Dot(transform.forward, toOther.normalized) < 0.8f) continue;
+            if (other.agent == null || !other.agent.enabled) continue;
+
+            // vozila iz suprotnog smjera se ne prate nego se svatko makne na svoju desnu
+            if (Vector3.Dot(transform.forward, other.transform.forward) < 0f)
+            {
+                agent.Move(transform.right * (1.5f * Time.deltaTime));
+                continue;
+            }
 
             ahead = other;
             break;
@@ -107,11 +120,8 @@ public class DeliveryVehicle : MonoBehaviour
             return;
         }
 
-        float aheadSpeed = ahead.agent != null && ahead.agent.enabled
-            ? ahead.agent.velocity.magnitude
-            : 0f;
-
-        agent.speed = Mathf.Min(desiredSpeed, Mathf.Max(0f, aheadSpeed - 0.5f));
+        float gap = Vector3.Distance(transform.position, ahead.transform.position);
+        agent.speed = Mathf.Clamp(gap - 3f, 0.5f, desiredSpeed);
     }
 
     public bool BeginJourney(
@@ -124,6 +134,24 @@ public class DeliveryVehicle : MonoBehaviour
         Vector3? viaWaypoint = null)
     {
         rippleSpot = to;
+
+        if (rival)
+        {
+            foreach (MeshRenderer rend in GetComponentsInChildren<MeshRenderer>())
+                rend.material.color = rivalTint;
+
+            foreach (SpriteRenderer icon in GetComponentsInChildren<SpriteRenderer>(true))
+                icon.color = rivalIconTint;
+        }
+
+        if (rivalMarkerPrefab != null)
+        {
+            GameObject marker = Instantiate(rivalMarkerPrefab, transform);
+            marker.transform.localPosition = Vector3.up * 0.05f;
+            marker.GetComponent<SpriteRenderer>().color = rival
+                ? new Color(0.86f, 0.19f, 0.19f)
+                : new Color(0.2f, 0.45f, 1f, 0.6f);
+        }
 
         // Cilj je cesto zgrada daleko od ceste, pa se trazi navmesh u sirem radijusu.
         Vector3 start = Snap(from);
@@ -246,7 +274,11 @@ public class DeliveryVehicle : MonoBehaviour
     {
         for (int i = 0; i < 3; i++)
         {
-            Instantiate(ripplePrefab, rippleSpot + Vector3.up * 0.5f, ripplePrefab.transform.rotation);
+            Vector3 spot = new Vector3(rippleSpot.x, transform.position.y + 0.05f, rippleSpot.z);
+            GameObject ring = Instantiate(ripplePrefab, spot, ripplePrefab.transform.rotation);
+            if (rival)
+                ring.GetComponent<SpriteRenderer>().color = new Color(0.9f, 0.25f, 0.25f);
+
             yield return new WaitForSeconds(0.25f);
         }
     }

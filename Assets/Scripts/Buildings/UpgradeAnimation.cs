@@ -11,6 +11,8 @@ public class UpgradeAnimation : MonoBehaviour
     public Transform dustGroup;
     public float dustDuration = 1.5f;
     public float dustSpread = 2f;
+    public AudioSource upgradeAudio;
+    public AudioClip upgradeSound;
 
     private BuildingInfo building;
     private Renderer rend;
@@ -33,6 +35,9 @@ public class UpgradeAnimation : MonoBehaviour
         {
             bool loading = lastLevel < 0;
             lastLevel = building.upgradeLevel;
+
+            if (!loading && upgradeAudio != null && upgradeSound != null)
+                upgradeAudio.PlayOneShot(upgradeSound);
 
             if (loading || dustGroup == null)
             {
@@ -79,6 +84,8 @@ public class UpgradeAnimation : MonoBehaviour
 
     void ApplyLevel()
     {
+        building.ClearColor();
+
         if (level1Props != null) level1Props.SetActive(lastLevel >= 1);
         if (level2Props != null) level2Props.SetActive(lastLevel >= 2);
         if (level3Props != null) level3Props.SetActive(lastLevel >= 3);

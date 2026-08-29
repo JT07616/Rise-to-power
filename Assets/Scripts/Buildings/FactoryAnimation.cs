@@ -12,6 +12,7 @@ public class FactoryAnimation : MonoBehaviour
     public Transform[] indicatorSpots;
     public float smokeRise = 250f;
     public float smokeTime = 2f;
+    public AudioSource machineAudio;
 
     private BuildingInfo factory;
     private Vector3 startScale;
@@ -52,6 +53,7 @@ public class FactoryAnimation : MonoBehaviour
                 if (smoke != null && smoke.gameObject.activeSelf)
                     smoke.gameObject.SetActive(false);
             }
+            if (machineAudio != null && machineAudio.isPlaying) machineAudio.Stop();
             return;
         }
 
@@ -60,6 +62,8 @@ public class FactoryAnimation : MonoBehaviour
             indicator.SetActive(true);
             timeLeft = factory.productionDurationSeconds;
             CenterIndicator();
+
+            if (machineAudio != null) machineAudio.Play();
         }
 
         timeLeft -= Time.deltaTime;

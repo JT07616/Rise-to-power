@@ -1054,7 +1054,7 @@ public class BuildingInfo : MonoBehaviour
 
     public void RefreshRenderers()
     {
-        renderers = GetComponentsInChildren<Renderer>();
+        renderers = GetComponentsInChildren<MeshRenderer>();
         originalColors = new Color[renderers.Length];
 
         for (int i = 0; i < renderers.Length; i++)
