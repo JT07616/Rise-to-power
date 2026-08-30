@@ -4,6 +4,12 @@ using TMPro;
 
 public class BuildingPopupUI : MonoBehaviour
 {
+    private const float HudBarHeight = 48f;
+    private const float ActivityPanelHeight = 210f;
+    private const float ScreenMargin = 12f;
+    private const float PanelGap = 12f;
+    private static readonly Vector2 PanelSize = new Vector2(450f, 550f);
+
     public static bool IsAnyOpen { get; private set; }
 
     public GameObject panel;
@@ -49,6 +55,8 @@ public class BuildingPopupUI : MonoBehaviour
     public AudioClip buttonClickSound;
 
     private BuildingInfo currentBuilding;
+    private int layoutScreenWidth;
+    private int layoutScreenHeight;
 
     public bool IsOpen
     {
@@ -57,6 +65,8 @@ public class BuildingPopupUI : MonoBehaviour
 
     void Start()
     {
+        ConfigurePanelLayout();
+
         if (backgroundImage == null && panel != null)
         {
             backgroundImage = panel.GetComponent<Image>();
@@ -87,6 +97,11 @@ public class BuildingPopupUI : MonoBehaviour
 
     void Update()
     {
+        if (layoutScreenWidth != Screen.width || layoutScreenHeight != Screen.height)
+        {
+            ConfigurePanelLayout();
+        }
+
         if (IsOpen && currentBuilding != null)
         {
             RefreshText();
@@ -144,6 +159,11 @@ public class BuildingPopupUI : MonoBehaviour
         {
             return;
         }
+
+        int previousDepth = GUI.depth;
+        GUI.depth = -800;
+        try
+        {
 
         Rect panelRect = GetPanelScreenRect();
         float buttonHeight = 38f;
@@ -342,6 +362,47 @@ public class BuildingPopupUI : MonoBehaviour
         }
 
         GUI.enabled = true;
+        }
+        finally
+        {
+            GUI.depth = previousDepth;
+        }
+    }
+
+    private void ConfigurePanelLayout()
+    {
+        layoutScreenWidth = Screen.width;
+        layoutScreenHeight = Screen.height;
+
+        if (panel == null)
+        {
+            return;
+        }
+
+        Canvas popupCanvas = GetComponent<Canvas>();
+        if (popupCanvas != null)
+        {
+            popupCanvas.overrideSorting = true;
+            popupCanvas.sortingOrder = 800;
+        }
+
+        RectTransform rectTransform = panel.GetComponent<RectTransform>();
+        if (rectTransform == null)
+        {
+            return;
+        }
+
+        float panelTop = HudBarHeight + ScreenMargin + ActivityPanelHeight + PanelGap;
+        float availableHeight = Mathf.Max(1f, Screen.height - panelTop - ScreenMargin);
+        float scale = Mathf.Min(1f, availableHeight / PanelSize.y);
+
+        rectTransform.anchorMin = new Vector2(0f, 1f);
+        rectTransform.anchorMax = new Vector2(0f, 1f);
+        rectTransform.pivot = new Vector2(0f, 1f);
+        rectTransform.anchoredPosition = new Vector2(ScreenMargin, -panelTop);
+        rectTransform.sizeDelta = PanelSize;
+        rectTransform.localScale = new Vector3(scale, scale, 1f);
+        rectTransform.SetAsLastSibling();
     }
 
     private bool DrawActionButton(Rect rect, string label, Texture2D image, bool enabled)

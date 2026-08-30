@@ -201,6 +201,10 @@ public class AiFacilityMarker : MonoBehaviour
             return;
         }
 
+        int previousDepth = GUI.depth;
+        GUI.depth = 1000;
+        try
+        {
         Vector3 screen = Camera.main.WorldToScreenPoint(LabelPosition);
         if (screen.z <= 0f)
         {
@@ -223,6 +227,11 @@ public class AiFacilityMarker : MonoBehaviour
         GUI.color = new Color(1f, 0.45f, 0.45f);
         GUI.Box(rect, label);
         GUI.color = previousColor;
+        }
+        finally
+        {
+            GUI.depth = previousDepth;
+        }
     }
 
     private Texture2D GetMapLabelImage()

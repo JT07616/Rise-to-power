@@ -1,5 +1,8 @@
 using System.Collections.Generic;
+using System.Text;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class DeliveryOrderManager : MonoBehaviour
 {
@@ -24,6 +27,13 @@ public class DeliveryOrderManager : MonoBehaviour
     private Texture2D popupBackgroundImage;
     private Texture2D closeButtonImage;
     private Texture2D acceptOrderButtonImage;
+    private GameObject orderPopupCanvas;
+    private RawImage orderPopupBackground;
+    private RawImage orderCloseButtonImage;
+    private RawImage orderAcceptButtonImage;
+    private TMP_Text orderDetailsText;
+    private TMP_Text orderStatusText;
+    private Button orderAcceptButton;
 
     private readonly List<DeliveryOrder> orders = new List<DeliveryOrder>();
     private readonly List<DeliveryOrder> activeDeliveries = new List<DeliveryOrder>();
@@ -113,12 +123,21 @@ public class DeliveryOrderManager : MonoBehaviour
         popupBackgroundImage = popupImage;
         closeButtonImage = closeImage;
         acceptOrderButtonImage = acceptImage;
+
+        EnsureOrderPopupUI();
+        orderPopupBackground.texture = popupBackgroundImage;
+        orderPopupBackground.color = popupBackgroundImage != null
+            ? Color.white
+            : new Color(0.12f, 0.01f, 0.01f, 0.98f);
+        orderCloseButtonImage.texture = closeButtonImage;
+        orderAcceptButtonImage.texture = acceptOrderButtonImage;
     }
 
     void Update()
     {
         CompleteFinishedDeliveries();
         CompleteFinishedAiDeliveries();
+        UpdateOrderPopupVisibility();
 
         if (!GameEventManager.IsPlayerTurn)
         {
@@ -136,6 +155,12 @@ public class DeliveryOrderManager : MonoBehaviour
     {
         ClearOrders();
         IsPopupOpen = false;
+
+        if (orderPopupCanvas != null)
+        {
+            Destroy(orderPopupCanvas);
+        }
+
         if (instance == this)
         {
             instance = null;
@@ -266,36 +291,13 @@ public class DeliveryOrderManager : MonoBehaviour
             return;
         }
 
-        if (!BuildingPopupUI.IsAnyOpen)
+        if (!BuildingPopupUI.IsAnyOpen && !IsPopupOpen)
         {
+            int previousDepth = GUI.depth;
+            GUI.depth = 1000;
             DrawOrderLabels();
+            GUI.depth = previousDepth;
         }
-
-        if (selectedOrder < 0 || selectedOrder >= orders.Count)
-        {
-            return;
-        }
-
-        int previousDepth = GUI.depth;
-        GUI.depth = -900;
-        GUI.color = new Color(0f, 0f, 0f, 0.5f);
-        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-        GUI.color = Color.white;
-
-        Rect rect = new Rect((Screen.width - 440f) / 2f, (Screen.height - 580f) / 2f, 440f, 580f);
-        if (popupBackgroundImage != null)
-        {
-            GUIStyle windowStyle = new GUIStyle(GUI.skin.window);
-            windowStyle.normal.background = popupBackgroundImage;
-            windowStyle.border = new RectOffset(0, 0, 0, 0);
-            GUI.Window(771002, rect, DrawOrderWindow, "Delivery request", windowStyle);
-        }
-        else
-        {
-            GUI.Window(771002, rect, DrawOrderWindow, "Delivery request");
-        }
-
-        GUI.depth = previousDepth;
     }
 
     public void OpenOrder(int orderIndex)
@@ -330,6 +332,7 @@ public class DeliveryOrderManager : MonoBehaviour
 
         selectedOrder = orderIndex;
         IsPopupOpen = true;
+        UpdateOrderPopupVisibility();
     }
 
     private void GenerateDailyOrders()
@@ -538,80 +541,229 @@ public class DeliveryOrderManager : MonoBehaviour
         return candidates;
     }
 
-    private void DrawOrderWindow(int windowId)
+    private void EnsureOrderPopupUI()
     {
-        Rect closeRect = new Rect(400f, 4f, 36f, 36f);
-        bool closeClicked = closeButtonImage != null
-            ? GUI.Button(closeRect, closeButtonImage, GUIStyle.none)
-            : GUI.Button(closeRect, "X");
-        if (closeClicked)
+        if (orderPopupCanvas != null)
         {
-            selectedOrder = -1;
-            IsPopupOpen = false;
             return;
         }
 
+        orderPopupCanvas = new GameObject(
+            "Delivery Order UI",
+            typeof(RectTransform),
+            typeof(Canvas),
+            typeof(CanvasScaler),
+            typeof(GraphicRaycaster));
+        orderPopupCanvas.transform.SetParent(transform, false);
+
+        Canvas canvas = orderPopupCanvas.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 900;
+
+        CanvasScaler scaler = orderPopupCanvas.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1024f, 768f);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 1f;
+
+        RectTransform dimmerRect = CreateUIRect("Dimmer", orderPopupCanvas.transform);
+        StretchToParent(dimmerRect);
+        RawImage dimmer = dimmerRect.gameObject.AddComponent<RawImage>();
+        dimmer.color = new Color(0f, 0f, 0f, 0.5f);
+
+        RectTransform panelRect = CreateUIRect("Delivery Order Panel", dimmerRect);
+        SetAnchoredRect(panelRect, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            Vector2.zero, new Vector2(440f, 580f), new Vector2(0.5f, 0.5f));
+        orderPopupBackground = panelRect.gameObject.AddComponent<RawImage>();
+        orderPopupBackground.color = new Color(0.12f, 0.01f, 0.01f, 0.98f);
+
+        TMP_Text title = CreateUIText("Title", panelRect, 28f, FontStyles.Bold,
+            TextAlignmentOptions.Center);
+        SetAnchoredRect(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(-20f, -10f), new Vector2(352f, 44f), new Vector2(0.5f, 1f));
+        title.text = "Delivery Order";
+        title.color = Color.white;
+
+        orderDetailsText = CreateUIText("Order Details", panelRect, 14f, FontStyles.Normal,
+            TextAlignmentOptions.TopLeft);
+        SetAnchoredRect(orderDetailsText.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(20f, -68f), new Vector2(400f, 350f), new Vector2(0f, 1f));
+        orderDetailsText.richText = true;
+        orderDetailsText.textWrappingMode = TextWrappingModes.NoWrap;
+        orderDetailsText.lineSpacing = 7f;
+        orderDetailsText.color = new Color(0.94f, 0.94f, 0.94f);
+
+        orderStatusText = CreateUIText("Order Status", panelRect, 14f, FontStyles.Bold,
+            TextAlignmentOptions.Center);
+        SetAnchoredRect(orderStatusText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 115f), new Vector2(390f, 55f), new Vector2(0.5f, 0f));
+
+        Button closeButton = CreateUIImageButton("Close", panelRect, out orderCloseButtonImage);
+        SetAnchoredRect((RectTransform)closeButton.transform, new Vector2(1f, 1f), new Vector2(1f, 1f),
+            new Vector2(-4f, -4f), new Vector2(36f, 36f), new Vector2(1f, 1f));
+        closeButton.onClick.AddListener(CloseSelectedOrderPopup);
+
+        orderAcceptButton = CreateUIImageButton("Accept Delivery", panelRect, out orderAcceptButtonImage);
+        SetAnchoredRect((RectTransform)orderAcceptButton.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 55f), new Vector2(315f, 60f), new Vector2(0.5f, 0.5f));
+        orderAcceptButton.onClick.AddListener(AcceptSelectedOrder);
+
+        orderPopupCanvas.SetActive(false);
+    }
+
+    private void UpdateOrderPopupVisibility()
+    {
+        if (orderPopupCanvas == null)
+        {
+            return;
+        }
+
+        bool visible = selectedOrder >= 0 && selectedOrder < orders.Count && IsPopupOpen &&
+                       GameEventManager.IsPlayerTurn && !GameEventManager.IsPauseMenuOpen &&
+                       !GameEventManager.IsPopupOpen;
+        if (orderPopupCanvas.activeSelf != visible)
+        {
+            orderPopupCanvas.SetActive(visible);
+        }
+
+        if (visible)
+        {
+            RefreshOrderPopupUI();
+        }
+    }
+
+    private void RefreshOrderPopupUI()
+    {
         DeliveryOrder order = orders[selectedOrder];
         GameResources resources = GameResources.Instance;
-        GUILayout.Space(12f);
-        GUILayout.Label($"Customer: {order.customerName}");
-        GUILayout.Label($"Territory: {GetTerritoryName(order.territoryOwner)}");
-        GUILayout.Label($"Requested goods: {order.grams} g");
+        int workerCommission = SharedActionRules.GetDeliveryWorkerCommission(resources, order.reward);
+
+        StringBuilder details = new StringBuilder();
+        AppendOrderRow(details, "Customer", order.customerName);
+        AppendOrderRow(details, "Territory", GetTerritoryName(order.territoryOwner));
+        AppendOrderRow(details, "Requested goods", $"{order.grams} g");
         if (order.target != null && order.target.TryGetDistrictControl(
                 out string districtName,
                 out int controlScore,
                 out int controlLimit))
         {
-            GUILayout.Label($"{districtName} control: {controlScore:+0;-0;0} " +
-                            $"(-{controlLimit} Volkov / +{controlLimit} you)");
+            AppendOrderRow(details, "District control",
+                $"{districtName}: {controlScore:+0;-0;0} (-{controlLimit} Volkov / +{controlLimit} you)");
         }
-        GUILayout.Label($"Payment: +{order.reward} €");
-        GUILayout.Label($"Market demand: {GetDemandName(order.marketMultiplier)}");
-        GUILayout.Label(GetTerritoryTerms(order.territoryOwner));
-        GUILayout.Label($"Police risk: +{order.risk}");
-        int workerCommission = SharedActionRules.GetDeliveryWorkerCommission(resources, order.reward);
-        GUILayout.Label($"Courier commission: -{workerCommission} € (on success)");
-        GUILayout.Label($"Net profit: +{Mathf.Max(0, order.reward - workerCommission)} €");
-        GUILayout.Label($"Distance from factory: {order.distance:0} m");
-        GUILayout.Label($"Estimated delivery time: {order.duration:0} seconds");
+        AppendOrderRow(details, "Payment", $"+{order.reward} €");
+        AppendOrderRow(details, "Market demand", GetDemandName(order.marketMultiplier));
+        AppendOrderRow(details, "Route", GetTerritoryTerms(order.territoryOwner));
+        AppendOrderRow(details, "Police risk", $"+{order.risk}");
+        AppendOrderRow(details, "Courier commission", $"-{workerCommission} € on success");
+        AppendOrderRow(details, "Net profit", $"+{Mathf.Max(0, order.reward - workerCommission)} €");
+        AppendOrderRow(details, "Distance", $"{order.distance:0} m");
+        AppendOrderRow(details, "Estimated time", $"{order.duration:0} seconds");
+        orderDetailsText.text = details.ToString();
 
+        StringBuilder status = new StringBuilder();
         if (resources != null && resources.robaUSkladistu < order.grams)
         {
-            GUILayout.Label($"Missing goods in store: {order.grams - resources.robaUSkladistu} g");
+            status.Append($"Missing goods in store: {order.grams - resources.robaUSkladistu} g");
         }
         if (resources != null && resources.SlobodniRadnici <= 0)
         {
-            GUILayout.Label("A free worker is required.");
+            if (status.Length > 0)
+            {
+                status.AppendLine();
+            }
+            status.Append("A free worker is required.");
         }
-        GUILayout.Space(16f);
+        orderStatusText.text = status.ToString();
+        orderStatusText.color = status.Length > 0
+            ? new Color(1f, 0.68f, 0.58f)
+            : Color.white;
 
-        bool canAccept = CanCompleteDelivery(order) && !order.completed && !order.inProgress;
-        GUI.enabled = canAccept;
-        Color previousColor = GUI.color;
-        GUI.color = canAccept ? Color.white : new Color(0.4f, 0.4f, 0.4f, 0.8f);
-        bool accepted;
-        if (acceptOrderButtonImage != null)
+        orderAcceptButton.interactable =
+            CanCompleteDelivery(order) && !order.completed && !order.inProgress;
+        orderAcceptButtonImage.color = orderAcceptButton.interactable
+            ? Color.white
+            : new Color(0.4f, 0.4f, 0.4f, 0.8f);
+    }
+
+    private static void AppendOrderRow(StringBuilder details, string label, string value)
+    {
+        details.Append("<b>").Append(label).Append("</b><pos=145>")
+            .Append(value).Append("</pos>\n");
+    }
+
+    private void CloseSelectedOrderPopup()
+    {
+        selectedOrder = -1;
+        IsPopupOpen = false;
+        UpdateOrderPopupVisibility();
+    }
+
+    private void AcceptSelectedOrder()
+    {
+        if (selectedOrder < 0 || selectedOrder >= orders.Count)
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            accepted = GUILayout.Button(
-                acceptOrderButtonImage,
-                GUIStyle.none,
-                GUILayout.Width(315f),
-                GUILayout.Height(60f));
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
+            return;
         }
-        else
-        {
-            accepted = GUILayout.Button("Accept & Deliver", GUILayout.Height(40f));
-        }
-        GUI.color = previousColor;
-        if (accepted)
-        {
-            CompleteDelivery(order);
-        }
-        GUI.enabled = true;
+
+        CompleteDelivery(orders[selectedOrder]);
+        UpdateOrderPopupVisibility();
+    }
+
+    private static RectTransform CreateUIRect(string name, Transform parent)
+    {
+        GameObject element = new GameObject(name, typeof(RectTransform));
+        RectTransform rectTransform = element.GetComponent<RectTransform>();
+        rectTransform.SetParent(parent, false);
+        return rectTransform;
+    }
+
+    private static TMP_Text CreateUIText(
+        string name,
+        Transform parent,
+        float fontSize,
+        FontStyles fontStyle,
+        TextAlignmentOptions alignment)
+    {
+        RectTransform rectTransform = CreateUIRect(name, parent);
+        TMP_Text text = rectTransform.gameObject.AddComponent<TextMeshProUGUI>();
+        text.fontSize = fontSize;
+        text.fontStyle = fontStyle;
+        text.alignment = alignment;
+        text.raycastTarget = false;
+        return text;
+    }
+
+    private static Button CreateUIImageButton(string name, Transform parent, out RawImage image)
+    {
+        RectTransform rectTransform = CreateUIRect(name, parent);
+        image = rectTransform.gameObject.AddComponent<RawImage>();
+        Button button = rectTransform.gameObject.AddComponent<Button>();
+        button.targetGraphic = image;
+        return button;
+    }
+
+    private static void SetAnchoredRect(
+        RectTransform rectTransform,
+        Vector2 anchorMin,
+        Vector2 anchorMax,
+        Vector2 position,
+        Vector2 size,
+        Vector2 pivot)
+    {
+        rectTransform.anchorMin = anchorMin;
+        rectTransform.anchorMax = anchorMax;
+        rectTransform.pivot = pivot;
+        rectTransform.anchoredPosition = position;
+        rectTransform.sizeDelta = size;
+    }
+
+    private static void StretchToParent(RectTransform rectTransform)
+    {
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
     }
 
     private static string GetTerritoryName(TerritoryOwner owner)
@@ -632,11 +784,11 @@ public class DeliveryOrderManager : MonoBehaviour
         switch (owner)
         {
             case TerritoryOwner.Player:
-                return "Safe route: -30% risk, -10% territory payment.";
+                return "-30% risk, -10% payment";
             case TerritoryOwner.AI:
-                return "Hostile route: +10 risk, +40% territory payment.";
+                return "+10 risk, +40% payment";
             default:
-                return "Uncontrolled route: +3 risk, standard territory payment.";
+                return "+3 risk, standard payment";
         }
     }
 
@@ -998,6 +1150,10 @@ public class DeliveryOrderManager : MonoBehaviour
     {
         selectedOrder = -1;
         IsPopupOpen = false;
+        if (orderPopupCanvas != null)
+        {
+            orderPopupCanvas.SetActive(false);
+        }
     }
 
     private void ClearOrders()

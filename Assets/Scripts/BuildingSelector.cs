@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class BuildingSelector : MonoBehaviour
 {
@@ -24,6 +26,16 @@ public class BuildingSelector : MonoBehaviour
     private BuildingInfo selectedBuilding;
     private BuildingInfo[] labeledBuildings;
     private Texture2D shortcutButtonTexture;
+    private GameObject mapLabelCanvas;
+    private readonly Dictionary<BuildingInfo, MapLabelUI> mapLabelUI =
+        new Dictionary<BuildingInfo, MapLabelUI>();
+
+    private sealed class MapLabelUI
+    {
+        public RectTransform rectTransform;
+        public RawImage image;
+        public TMP_Text text;
+    }
 
     void Awake()
     {
@@ -38,6 +50,7 @@ public class BuildingSelector : MonoBehaviour
         }
 
         labeledBuildings = FindObjectsByType<BuildingInfo>(FindObjectsSortMode.None);
+        CreateMapLabels();
     }
 
     void OnDestroy()
@@ -50,6 +63,11 @@ public class BuildingSelector : MonoBehaviour
         if (shortcutButtonTexture != null)
         {
             Destroy(shortcutButtonTexture);
+        }
+
+        if (mapLabelCanvas != null)
+        {
+            Destroy(mapLabelCanvas);
         }
     }
 
@@ -104,6 +122,11 @@ public class BuildingSelector : MonoBehaviour
                 HandleClick();
             }
         }
+    }
+
+    void LateUpdate()
+    {
+        UpdateMapLabels();
     }
 
     public static bool IsPointerOverShortcutBar(Vector2 screenPosition)
@@ -222,23 +245,38 @@ public class BuildingSelector : MonoBehaviour
             return;
         }
 
-        int previousDepth = GUI.depth;
-        GUI.depth = 100;
-
-        if (mainCamera != null && !GameEventManager.IsPauseMenuOpen &&
-            !GameEventManager.IsPopupOpen && !DeliveryOrderManager.IsPopupOpen &&
-            GameEventManager.CanPlayerAct)
+        if (GameEventManager.IsPauseMenuOpen || GameEventManager.IsPopupOpen ||
+            DeliveryOrderManager.IsPopupOpen || BuildingPopupUI.IsAnyOpen)
         {
-            DrawBuildingLabels();
+            return;
         }
+
+        int previousDepth = GUI.depth;
+        GUI.depth = 1000;
 
         DrawBuildingShortcuts();
 
         GUI.depth = previousDepth;
     }
 
-    void DrawBuildingLabels()
+    private void CreateMapLabels()
     {
+        mapLabelCanvas = new GameObject(
+            "Player Building Map Labels",
+            typeof(RectTransform),
+            typeof(Canvas),
+            typeof(CanvasScaler),
+            typeof(GraphicRaycaster));
+        mapLabelCanvas.transform.SetParent(transform, false);
+
+        Canvas canvas = mapLabelCanvas.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = -1000;
+
+        CanvasScaler scaler = mapLabelCanvas.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+
         foreach (BuildingInfo building in labeledBuildings)
         {
             if (building == null || !IsLabeledBuilding(building))
@@ -246,29 +284,99 @@ public class BuildingSelector : MonoBehaviour
                 continue;
             }
 
+            GameObject labelObject = new GameObject(
+                $"{building.buildingName} Map Label",
+                typeof(RectTransform),
+                typeof(RawImage),
+                typeof(Button));
+            RectTransform rectTransform = labelObject.GetComponent<RectTransform>();
+            rectTransform.SetParent(mapLabelCanvas.transform, false);
+            rectTransform.anchorMin = Vector2.zero;
+            rectTransform.anchorMax = Vector2.zero;
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            rectTransform.sizeDelta = new Vector2(145f, 50f);
+
+            RawImage image = labelObject.GetComponent<RawImage>();
+            image.color = Color.white;
+
+            TMP_Text text = null;
+            if (building.CurrentMapLabelImage == null)
+            {
+                GameObject textObject = new GameObject(
+                    "Text",
+                    typeof(RectTransform),
+                    typeof(TextMeshProUGUI));
+                RectTransform textRect = textObject.GetComponent<RectTransform>();
+                textRect.SetParent(rectTransform, false);
+                textRect.anchorMin = Vector2.zero;
+                textRect.anchorMax = Vector2.one;
+                textRect.offsetMin = Vector2.zero;
+                textRect.offsetMax = Vector2.zero;
+
+                text = textObject.GetComponent<TextMeshProUGUI>();
+                text.text = GetBuildingLabel(building);
+                text.fontSize = 14f;
+                text.alignment = TextAlignmentOptions.Center;
+                text.color = Color.white;
+                text.raycastTarget = false;
+                image.color = new Color(0f, 0f, 0f, 0.72f);
+            }
+
+            Button button = labelObject.GetComponent<Button>();
+            button.targetGraphic = image;
+            button.transition = Selectable.Transition.None;
+            BuildingInfo targetBuilding = building;
+            button.onClick.AddListener(() => FocusAndShow(targetBuilding));
+
+            mapLabelUI.Add(building, new MapLabelUI
+            {
+                rectTransform = rectTransform,
+                image = image,
+                text = text
+            });
+        }
+    }
+
+    private void UpdateMapLabels()
+    {
+        if (mapLabelCanvas == null)
+        {
+            return;
+        }
+
+        bool labelsVisible = mainCamera != null && GameEventManager.CanPlayerAct &&
+                             !GameEventManager.IsPauseMenuOpen && !GameEventManager.IsPopupOpen &&
+                             !DeliveryOrderManager.IsPopupOpen && !BuildingPopupUI.IsAnyOpen;
+        mapLabelCanvas.SetActive(labelsVisible);
+        if (!labelsVisible)
+        {
+            return;
+        }
+
+        foreach (KeyValuePair<BuildingInfo, MapLabelUI> entry in mapLabelUI)
+        {
+            BuildingInfo building = entry.Key;
+            MapLabelUI label = entry.Value;
+            if (building == null)
+            {
+                label.rectTransform.gameObject.SetActive(false);
+                continue;
+            }
+
             Vector3 screen = mainCamera.WorldToScreenPoint(building.LabelPosition);
-            if (screen.z <= 0f)
+            bool visible = screen.z > 0f;
+            label.rectTransform.gameObject.SetActive(visible);
+            if (!visible)
             {
                 continue;
             }
 
+            label.rectTransform.anchoredPosition = new Vector2(screen.x, screen.y);
             Texture2D labelImage = building.CurrentMapLabelImage;
-            bool clicked;
-
-            if (labelImage != null)
+            label.image.texture = labelImage;
+            if (label.text != null)
             {
-                Rect imageRect = new Rect(screen.x - 72.5f, Screen.height - screen.y - 25f, 145f, 50f);
-                clicked = GUI.Button(imageRect, labelImage, GUIStyle.none);
-            }
-            else
-            {
-                Rect textRect = new Rect(screen.x - 65f, Screen.height - screen.y - 15f, 130f, 30f);
-                clicked = GUI.Button(textRect, GetBuildingLabel(building));
-            }
-
-            if (clicked)
-            {
-                FocusAndShow(building);
+                label.text.text = GetBuildingLabel(building);
             }
         }
     }
@@ -337,7 +445,7 @@ public class BuildingSelector : MonoBehaviour
             if (clicked &&
                 Vector2.Distance(Event.current.mousePosition, buttonRect.center) <= buttonSize * 0.5f)
             {
-                FocusOnly(building);
+                FocusAndShow(building);
             }
 
             if (hovered)
@@ -473,17 +581,6 @@ public class BuildingSelector : MonoBehaviour
         texture.SetPixels(pixels);
         texture.Apply();
         return texture;
-    }
-
-    void FocusOnly(BuildingInfo building)
-    {
-        SimpleStrategyCamera camera = mainCamera != null
-            ? mainCamera.GetComponent<SimpleStrategyCamera>()
-            : null;
-        if (camera != null)
-        {
-            camera.FocusOn(building.LabelPosition, null);
-        }
     }
 
     void FocusAndShow(BuildingInfo building)

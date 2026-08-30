@@ -103,7 +103,15 @@ public class ActionIcons : MonoBehaviour
 
     void OnGUI()
     {
-        if (Camera.main == null) return;
+        if (Camera.main == null || GameEventManager.IsPauseMenuOpen ||
+            GameEventManager.IsPopupOpen || DeliveryOrderManager.IsPopupOpen ||
+            BuildingPopupUI.IsAnyOpen)
+        {
+            return;
+        }
+
+        int previousDepth = GUI.depth;
+        GUI.depth = 1000;
 
         for (int i = 0; i < icons.Length; i++)
         {
@@ -125,5 +133,7 @@ public class ActionIcons : MonoBehaviour
             GUI.DrawTexture(rect, icons[i], ScaleMode.ScaleToFit, true);
             GUI.color = previous;
         }
+
+        GUI.depth = previousDepth;
     }
 }

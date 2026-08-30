@@ -3249,6 +3249,9 @@ public class GameEventManager : MonoBehaviour
             return;
         }
 
+        int previousDepth = GUI.depth;
+        GUI.depth = -1000;
+
         float x = (Screen.width - popupWidth) / 2f;
         float y = (Screen.height - popupHeight) / 2f;
         Rect rect = new Rect(x, y, popupWidth, popupHeight);
@@ -3311,6 +3314,7 @@ public class GameEventManager : MonoBehaviour
         }
 
         GUILayout.EndArea();
+        GUI.depth = previousDepth;
     }
 
     void DrawHowToPlayPopup()
