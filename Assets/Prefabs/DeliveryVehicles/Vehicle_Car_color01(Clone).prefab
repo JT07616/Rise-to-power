@@ -141,6 +141,8 @@ MonoBehaviour:
   rivalTint: {r: 1, g: 0.65, b: 0.65, a: 1}
   rivalIconTint: {r: 1, g: 0.25, b: 0.25, a: 1}
   rivalMarkerPrefab: {fileID: 5318698267954803926, guid: f7ed5ed8a8b63bc47bc0d639594d01b3, type: 3}
+  arrowPrefab: {fileID: 3829566642978719898, guid: 5732714fdcb25f84489592e8b11bacf3, type: 3}
+  arrowHeight: 6
 --- !u!114 &2351319848901755694
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -157,8 +159,8 @@ MonoBehaviour:
   laneWidthTolerance: 1.5
   probeExtraDistance: 1
   lookAheadDistance: 2
-  centeringStrength: 1.5
-  maximumCorrectionSpeed: 0.8
+  centeringStrength: 2.5
+  maximumCorrectionSpeed: 1.8
   correctionDeadZone: 0.15
   correctionSmoothing: 5
   maximumCenteringAngle: 45
@@ -191,7 +193,7 @@ AudioSource:
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 8300000, guid: 7aa2a630f5f9b634d96f32f22e41cfd3, type: 3}
   m_PlayOnAwake: 1
-  m_Volume: 0.4
+  m_Volume: 0.75
   m_Pitch: 1
   Loop: 1
   Mute: 0
@@ -199,8 +201,8 @@ AudioSource:
   SpatializePostEffects: 0
   Priority: 128
   DopplerLevel: 0
-  MinDistance: 5
-  MaxDistance: 60
+  MinDistance: 12
+  MaxDistance: 80
   Pan2D: 0
   rolloffMode: 1
   BypassEffects: 0

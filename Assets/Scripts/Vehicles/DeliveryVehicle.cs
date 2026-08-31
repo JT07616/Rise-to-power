@@ -21,10 +21,12 @@ public class DeliveryVehicle : MonoBehaviour
     public Color rivalTint = new Color(1f, 0.65f, 0.65f);
     public Color rivalIconTint = new Color(1f, 0.25f, 0.25f);
     public GameObject rivalMarkerPrefab;
+    public GameObject arrowPrefab;
 
     private NavMeshAgent agent;
     private NavMeshObstacle parkedObstacle;
     private DeliveryIndicator indicator;
+    private GameObject arrow;
 
     private Vector3 destination;
     private Vector3 returnPoint;
@@ -193,6 +195,14 @@ public class DeliveryVehicle : MonoBehaviour
             return false;
         }
 
+        if (arrowPrefab != null)
+        {
+            arrow = Instantiate(arrowPrefab, to, arrowPrefab.transform.rotation);
+            arrow.GetComponent<SpriteRenderer>().color = rival
+                ? new Color(0.86f, 0.19f, 0.19f)
+                : new Color(0.2f, 0.45f, 1f);
+        }
+
         state = viaWaypoint.HasValue ? State.ToWaypoint : State.ToDestination;
         indicator.Show();
         return true;
@@ -200,10 +210,8 @@ public class DeliveryVehicle : MonoBehaviour
 
     private void Arrive()
     {
-        if (ripplePrefab != null && GetComponentInChildren<PoliceBeacon>() == null)
-            StartCoroutine(SpawnRipples());
-
         indicator.Hide();
+        Destroy(arrow);
         agent.isStopped = true;
 
         // dok stoji, auto postane prava prepreka pa drugi voze oko njega
@@ -216,6 +224,13 @@ public class DeliveryVehicle : MonoBehaviour
         Action callback = onArrival;
         onArrival = null;
         callback?.Invoke();
+
+        // tek sad se zna je li posiljka stigla ili je presretnuta
+        if (ripplePrefab != null && GetComponentInChildren<PoliceBeacon>() == null &&
+            !AmbushTrapManager.JustAmbushed)
+        {
+            StartCoroutine(SpawnRipples());
+        }
 
         if (stopDuration <= 0f)
         {
@@ -264,6 +279,8 @@ public class DeliveryVehicle : MonoBehaviour
     // da narudzba ne ostane trajno zaglavljena.
     private void Fail()
     {
+        Destroy(arrow);
+
         Action callback = onArrival;
         onArrival = null;
         callback?.Invoke();

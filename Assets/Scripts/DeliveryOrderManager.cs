@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
@@ -862,7 +862,9 @@ public class DeliveryOrderManager : MonoBehaviour
             return;
         }
 
-        if (AmbushTrapManager.TryTriggerAmbush(TerritoryOwner.Player, order.grams, order.reward))
+        if (AmbushTrapManager.TryTriggerAmbush(
+                TerritoryOwner.Player, order.grams, order.reward,
+                order.target != null ? order.target.transform.position : (Vector3?)null))
         {
             order.inProgress = false;
             order.completed = true;
@@ -923,7 +925,9 @@ public class DeliveryOrderManager : MonoBehaviour
                 continue;
             }
 
-            if (AmbushTrapManager.TryTriggerAmbush(TerritoryOwner.Player, order.grams, order.reward))
+            if (AmbushTrapManager.TryTriggerAmbush(
+                TerritoryOwner.Player, order.grams, order.reward,
+                order.target != null ? order.target.transform.position : (Vector3?)null))
             {
                 order.inProgress = false;
                 order.completed = true;
@@ -991,7 +995,9 @@ public class DeliveryOrderManager : MonoBehaviour
             return;
         }
 
-        if (AmbushTrapManager.TryTriggerAmbush(TerritoryOwner.AI, delivery.grams, delivery.reward))
+        if (AmbushTrapManager.TryTriggerAmbush(
+                TerritoryOwner.AI, delivery.grams, delivery.reward,
+                delivery.targetRenderer != null ? delivery.targetRenderer.bounds.center : (Vector3?)null))
         {
             delivery.completed = true;
             activeAiDeliveries.Remove(delivery);

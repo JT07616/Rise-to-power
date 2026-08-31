@@ -89,6 +89,10 @@ PrefabInstance:
       value: Delivery_Vehicle_Red Variant
       objectReference: {fileID: 0}
     - target: {fileID: 6886372308808701953, guid: 91841d6228d97124cbf990ae30f11d83, type: 3}
+      propertyPath: arrowPrefab
+      value: 
+      objectReference: {fileID: 3829566642978719898, guid: 5732714fdcb25f84489592e8b11bacf3, type: 3}
+    - target: {fileID: 6886372308808701953, guid: 91841d6228d97124cbf990ae30f11d83, type: 3}
       propertyPath: ripplePrefab
       value: 
       objectReference: {fileID: 7287730544282847130, guid: b8445d1536560c646af075112a36871f, type: 3}
@@ -146,7 +150,7 @@ AudioSource:
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 8300000, guid: 7aa2a630f5f9b634d96f32f22e41cfd3, type: 3}
   m_PlayOnAwake: 1
-  m_Volume: 0.4
+  m_Volume: 0.75
   m_Pitch: 1
   Loop: 1
   Mute: 0
@@ -154,8 +158,8 @@ AudioSource:
   SpatializePostEffects: 0
   Priority: 128
   DopplerLevel: 0
-  MinDistance: 5
-  MaxDistance: 60
+  MinDistance: 12
+  MaxDistance: 80
   Pan2D: 0
   rolloffMode: 1
   BypassEffects: 0

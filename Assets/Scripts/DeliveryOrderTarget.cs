@@ -162,9 +162,16 @@ public class AiFacilityMarker : MonoBehaviour
     {
         get
         {
-            return facilityRenderer != null
-                ? facilityRenderer.bounds.center + Vector3.up * facilityRenderer.bounds.extents.y
-                : transform.position + Vector3.up * 2f;
+            if (facilityRenderer == null) return transform.position + Vector3.up * 2f;
+
+            // zgrada raste s upgradeom pa se visina racuna iz svega sto je na njoj
+            Bounds bounds = facilityRenderer.bounds;
+            foreach (MeshRenderer rend in GetComponentsInChildren<MeshRenderer>())
+            {
+                bounds.Encapsulate(rend.bounds);
+            }
+
+            return bounds.center + Vector3.up * bounds.extents.y;
         }
     }
 

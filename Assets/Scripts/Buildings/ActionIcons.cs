@@ -7,6 +7,7 @@ public class ActionIcons : MonoBehaviour
     public Texture2D gearIcon;
     public Texture2D workerIcon;
     public float iconSize = 110f;
+    public float fullSizeDistance = 60f;
     public float duration = 3f;
     public float rise = 60f;
     public Color playerColor = new Color(0.4f, 0.7f, 1f);
@@ -95,10 +96,19 @@ public class ActionIcons : MonoBehaviour
         times[slot] = 0f;
     }
 
+    // zgrada raste s levelom pa se visina racuna iz svega sto je trenutno na njoj
     Vector3 RivalPosition(AiFacilityRole role)
     {
         AiFacilityMarker facility = AiFacilityMarker.Find(role);
-        return facility != null ? facility.LabelPosition : Vector3.zero;
+        if (facility == null) return Vector3.zero;
+
+        Bounds bounds = new Bounds(facility.transform.position, Vector3.zero);
+        foreach (MeshRenderer rend in facility.GetComponentsInChildren<MeshRenderer>())
+        {
+            bounds.Encapsulate(rend.bounds);
+        }
+
+        return new Vector3(bounds.center.x, bounds.max.y + 3f, bounds.center.z);
     }
 
     void OnGUI()
@@ -120,12 +130,16 @@ public class ActionIcons : MonoBehaviour
             Vector3 screen = Camera.main.WorldToScreenPoint(spots[i]);
             if (screen.z <= 0f) continue;
 
+            // izdaleka se ikona smanjuje da ne preraste zgradu ispod sebe
+            float distance = Vector3.Distance(Camera.main.transform.position, spots[i]);
+            float size = iconSize * Mathf.Clamp(fullSizeDistance / distance, 0.4f, 1f);
+
             // ikona lagano poskakuje da privuce pogled
             float bob = Mathf.Abs(Mathf.Sin(Time.time * 3f + i)) * 12f;
             Rect rect = new Rect(
-                screen.x - iconSize * 0.5f,
-                Screen.height - screen.y - iconSize - bob - rise * times[i],
-                iconSize, iconSize);
+                screen.x - size * 0.5f,
+                Screen.height - screen.y - size - bob - rise * times[i],
+                size, size);
 
             Color color = i == 0 ? playerColor : rivalColor;
             Color previous = GUI.color;

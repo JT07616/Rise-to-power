@@ -10,6 +10,14 @@ public class AmbushTrapManager : MonoBehaviour
     [Min(1)] public int minimumRivalDeliveryGoods = 10;
 
     private TerritoryOwner trapOwner = TerritoryOwner.Neutral;
+    private static float lastAmbushTime = -1f;
+
+    // presretnuta posiljka nije isporucena, pa se preskace efekt dolaska
+    public static bool JustAmbushed
+    {
+        get { return Time.time - lastAmbushTime < 0.2f; }
+    }
+
     private int playerAmbushAvailableDay = 1;
     private int rivalAmbushAvailableDay = 1;
 
@@ -135,7 +143,11 @@ public class AmbushTrapManager : MonoBehaviour
                GameResources.Instance != null && GameResources.Instance.Opponent.FreeWorkers > 0;
     }
 
-    public static bool TryTriggerAmbush(TerritoryOwner deliveryOwner, int deliveredGoods, int deliveryValue)
+    public static bool TryTriggerAmbush(
+        TerritoryOwner deliveryOwner,
+        int deliveredGoods,
+        int deliveryValue,
+        Vector3? spot = null)
     {
         if (instance == null || instance.trapOwner == TerritoryOwner.Neutral ||
             instance.trapOwner == deliveryOwner)
@@ -175,6 +187,9 @@ public class AmbushTrapManager : MonoBehaviour
         TerritoryOwner winner = instance.trapOwner;
         instance.ReleaseTrapWorker();
         instance.trapOwner = TerritoryOwner.Neutral;
+
+        lastAmbushTime = Time.time;
+        if (spot.HasValue) AmbushEffect.Play(spot.Value, winner);
         if (winner == TerritoryOwner.Player)
         {
             instance.playerAmbushAvailableDay = GameEventManager.CurrentDay + instance.cooldownDays;
