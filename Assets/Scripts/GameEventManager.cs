@@ -122,7 +122,6 @@ public class GameEventManager : MonoBehaviour
     private float notificationPreviousTimeScale = 1f;
     private Func<GameEvent> pendingNext;
     private float previousTimeScale = 1f;
-    private Font activityLogFont;
     private Camera miniMapCamera;
     private RenderTexture miniMapTexture;
     private SimpleStrategyCamera strategyCamera;
@@ -139,7 +138,6 @@ public class GameEventManager : MonoBehaviour
 
     private class ActivityEntry
     {
-        public string emoji;
         public string text;
         public Color color;
     }
@@ -227,7 +225,7 @@ public class GameEventManager : MonoBehaviour
         }
 
         SetupMiniMap();
-        AddActivity("SYSTEM", "🌆", "Operation started.", new Color(0.75f, 0.75f, 0.75f));
+        AddActivity("SYSTEM", "Operation started.", new Color(0.75f, 0.75f, 0.75f));
 
         if (CharacterSelect.playerCharacter == "Male")
         {
@@ -301,11 +299,6 @@ public class GameEventManager : MonoBehaviour
         {
             miniMapTexture.Release();
             Destroy(miniMapTexture);
-        }
-
-        if (activityLogFont != null)
-        {
-            Destroy(activityLogFont);
         }
 
         RestoreTimeAfterNotification();
@@ -692,7 +685,7 @@ public class GameEventManager : MonoBehaviour
             return;
         }
 
-        instance.AddActivity(PlayerDisplayName, emoji, message, new Color(0.35f, 0.82f, 1f));
+        instance.AddActivity(PlayerDisplayName, message, new Color(0.35f, 0.82f, 1f));
         Debug.Log($"{PlayerDisplayName}: {message}");
     }
 
@@ -703,15 +696,14 @@ public class GameEventManager : MonoBehaviour
             return;
         }
 
-        instance.AddActivity("VOLKOV", emoji, message, new Color(1f, 0.42f, 0.42f));
+        instance.AddActivity("VOLKOV", message, new Color(1f, 0.42f, 0.42f));
         Debug.Log($"Volkov: {message}");
     }
 
-    void AddActivity(string actor, string emoji, string message, Color color)
+    void AddActivity(string actor, string message, Color color)
     {
         activityLog.Add(new ActivityEntry
         {
-            emoji = emoji,
             text = $"{GetActivityClock()}  {actor}: {message}",
             color = color
         });
@@ -2426,12 +2418,6 @@ public class GameEventManager : MonoBehaviour
         Rect panel = new Rect(margin, barHeight + margin, width, height);
         DrawHudPanelBackground(panel, "ACTIVITY LOG");
 
-        if (activityLogFont == null)
-        {
-            activityLogFont = Font.CreateDynamicFontFromOSFont(
-                new[] { "Segoe UI Emoji", "Segoe UI Symbol", "Arial" },
-                18);
-        }
         GUIStyle activityStyle = new GUIStyle(GUI.skin.label)
         {
             fontSize = 14,
@@ -2439,19 +2425,11 @@ public class GameEventManager : MonoBehaviour
             normal = { textColor = Color.white },
             wordWrap = true
         };
-        GUIStyle emojiStyle = new GUIStyle(GUI.skin.label)
-        {
-            font = activityLogFont,
-            fontSize = 17,
-            alignment = TextAnchor.MiddleCenter,
-            normal = { textColor = Color.white }
-        };
 
         float y = panel.y + 30f;
         for (int i = activityLog.Count - 1; i >= 0; i--)
         {
             activityStyle.normal.textColor = activityLog[i].color;
-            emojiStyle.normal.textColor = activityLog[i].color;
             float textWidth = panel.width - 50f;
             float entryHeight = Mathf.Max(
                 27f,
@@ -2461,10 +2439,6 @@ public class GameEventManager : MonoBehaviour
                 break;
             }
 
-            GUI.Label(
-                new Rect(panel.x + 10f, y, 28f, 27f),
-                activityLog[i].emoji,
-                emojiStyle);
             GUI.Label(
                 new Rect(panel.x + 40f, y, textWidth, entryHeight),
                 activityLog[i].text,
