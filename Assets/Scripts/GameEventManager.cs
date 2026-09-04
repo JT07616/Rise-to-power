@@ -136,6 +136,15 @@ public class GameEventManager : MonoBehaviour
     private bool victoryShown;
     private readonly List<ActivityEntry> activityLog = new List<ActivityEntry>();
 
+    private bool IsTurnProgressPaused
+    {
+        get
+        {
+            return IsPauseMenuOpen || notificationPausedGame ||
+                   (strategyCamera != null && strategyCamera.IsFocusing);
+        }
+    }
+
     private class ActivityEntry
     {
         public string text;
@@ -179,6 +188,11 @@ public class GameEventManager : MonoBehaviour
 
     void Start()
     {
+        // Time scale survives scene changes. A game opened after leaving a paused scene must
+        // always start with a running simulation.
+        Time.timeScale = 1f;
+        IsPauseMenuOpen = false;
+
         MenuMusic music = FindFirstObjectByType<MenuMusic>();
 
         if (music != null)
@@ -263,14 +277,14 @@ public class GameEventManager : MonoBehaviour
 
     void UpdateTurnTimer()
     {
-        if (!IsPlayerTurn || playerTurnAnnouncementActive || IsPauseMenuOpen ||
+        if (!IsPlayerTurn || playerTurnAnnouncementActive || IsTurnProgressPaused ||
             GameResources.Instance == null ||
             GameResources.Instance.gameOver || GameResources.Instance.chapterEnded)
         {
             return;
         }
 
-        PlayerTurnTimeRemaining = Mathf.Max(0f, PlayerTurnTimeRemaining - Time.deltaTime);
+        PlayerTurnTimeRemaining = Mathf.Max(0f, PlayerTurnTimeRemaining - Time.unscaledDeltaTime);
         if (PlayerTurnTimeRemaining <= 0f)
         {
             ReportPlayerActivity("⏰", "Your phase reached 12:00; unused actions expired.");
@@ -438,7 +452,7 @@ public class GameEventManager : MonoBehaviour
         for (int countdown = 4; countdown >= 1; countdown--)
         {
             aiTurnCountdown = countdown;
-            yield return new WaitForSeconds(1f);
+            yield return StartCoroutine(WaitForTurnCountdownSecond());
         }
 
         aiTurnCountdown = 0;
@@ -455,8 +469,15 @@ public class GameEventManager : MonoBehaviour
 
         while (AiActionsRemaining > 0 && AiTurnTimeRemaining > 0f)
         {
-            AiTurnTimeRemaining = Mathf.Max(0f, AiTurnTimeRemaining - Time.deltaTime);
-            timeUntilAction -= Time.deltaTime;
+            if (IsTurnProgressPaused)
+            {
+                yield return null;
+                continue;
+            }
+
+            float turnDeltaTime = Time.unscaledDeltaTime;
+            AiTurnTimeRemaining = Mathf.Max(0f, AiTurnTimeRemaining - turnDeltaTime);
+            timeUntilAction -= turnDeltaTime;
 
             if (timeUntilAction > 0f)
             {
@@ -497,7 +518,7 @@ public class GameEventManager : MonoBehaviour
         }
 
         List<Func<bool>> availableActions = new List<Func<bool>>();
-        const int hireCost = 220;
+        const int hireCost = SharedActionRules.WorkerHireCost;
         int productionGoods = ai.FactoryProductionGoods;
         const int productionWorkers = 1;
         float productionSeconds = ai.FactoryProductionDurationSeconds;
@@ -774,7 +795,7 @@ public class GameEventManager : MonoBehaviour
         for (int countdown = 4; countdown >= 1; countdown--)
         {
             playerTurnCountdown = countdown;
-            yield return new WaitForSeconds(1f);
+            yield return StartCoroutine(WaitForTurnCountdownSecond());
         }
 
         playerTurnCountdown = 0;
@@ -782,6 +803,20 @@ public class GameEventManager : MonoBehaviour
         PlayerTurnTimeRemaining = playerTurnDuration;
         ReportPlayerActivity("🌅", $"Day {CurrentDay} started with {actionsPerSide} actions.");
         IsPopupOpen = eventActive;
+    }
+
+    IEnumerator WaitForTurnCountdownSecond()
+    {
+        float timeRemaining = 1f;
+        while (timeRemaining > 0f)
+        {
+            if (!IsTurnProgressPaused)
+            {
+                timeRemaining -= Time.unscaledDeltaTime;
+            }
+
+            yield return null;
+        }
     }
 
     void ContinueChain()
@@ -2691,9 +2726,10 @@ public class GameEventManager : MonoBehaviour
 
         int playerTerritoryPercent = Mathf.RoundToInt(
             instance.GetTerritoryPercent(TerritoryOwner.Player));
-        GameResources.Instance.utjecaj = playerTerritoryPercent;
-        GameResources.Instance.Opponent.influence = Mathf.RoundToInt(
+        int opponentTerritoryPercent = Mathf.RoundToInt(
             instance.GetTerritoryPercent(TerritoryOwner.AI));
+        GameResources.Instance.utjecaj = playerTerritoryPercent;
+        GameResources.Instance.Opponent.influence = opponentTerritoryPercent;
 
         GameStoryManager.ReportTerritoryPercent(playerTerritoryPercent);
 
@@ -2707,6 +2743,17 @@ public class GameEventManager : MonoBehaviour
             {
                 instance.ShowVictory(playerTerritoryPercent);
             }
+        }
+        else if (opponentTerritoryPercent >= VictoryTerritoryPercent &&
+                 !GameResources.Instance.gameOver &&
+                 !GameResources.Instance.chapterEnded)
+        {
+            GameResources.Instance.gameOver = true;
+            GameResources.Instance.gameOverReason =
+                $"Volkov controls {opponentTerritoryPercent}% of the city. " +
+                "Your organization no longer has enough territory to challenge him.";
+            instance.StopAllCoroutines();
+            instance.ShowGameOver();
         }
     }
 

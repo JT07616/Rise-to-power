@@ -64,6 +64,27 @@ public class DeliveryOrderManager : MonoBehaviour
         }
     }
 
+    public static bool HasPendingPlayerIncome
+    {
+        get
+        {
+            if (instance == null)
+            {
+                return false;
+            }
+
+            foreach (DeliveryOrder order in instance.pendingPlayerDeliveries)
+            {
+                if (order != null && order.inProgress && !order.completed)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
     private static readonly string[] AliasPrefixes =
     {
         "Neon", "Velvet", "Silent", "Midnight", "Chrome", "Crimson",

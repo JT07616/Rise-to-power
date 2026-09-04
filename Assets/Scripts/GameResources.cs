@@ -26,6 +26,8 @@ public interface IActionResources
 
 public static class SharedActionRules
 {
+    public const int WorkerHireCost = 220;
+
     public static bool CanApplyResourceChange(IActionResources resources, int money, int workers)
     {
         return resources != null &&
@@ -830,6 +832,18 @@ public class GameResources : MonoBehaviour, IActionResources
         {
             gameOver = true;
             gameOverReason = "You ran out of money. Without cash, the operation cannot continue.";
+            return;
+        }
+
+        bool cannotRecover = novac < SharedActionRules.WorkerHireCost &&
+                             radnici <= 0 &&
+                             !DeliveryOrderManager.HasPendingPlayerIncome;
+        if (cannotRecover)
+        {
+            gameOver = true;
+            gameOverReason =
+                "You have no workers and cannot afford to hire one. " +
+                "Without an active delivery to bring in money, the operation is bankrupt.";
         }
     }
 
